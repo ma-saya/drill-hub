@@ -11,7 +11,7 @@ type Problem = {
   level: number
   type: string
   theme_id: string
-  themes: { name: string }[]
+  themes: any // Supabaseの仕様に合わせてanyにし、配列エラーを回避
 }
 
 type StudyRecord = {
@@ -131,7 +131,7 @@ export default function Problems() {
               
               <div className={styles.badgeGroup}>
                 <span className={`${styles.badge} ${styles.badgeTheme}`}>
-                  {problem.themes?.[0]?.name || 'テーマ未設定'}
+                  {problem.themes?.name || 'テーマ未設定'}
                 </span>
                 <span className={`${styles.badge} ${
                   problem.level === 1 ? styles.badgeLevel1 : 
@@ -145,10 +145,14 @@ export default function Problems() {
               </div>
 
               <div className={styles.statusIndicator}>
-                {isSolved ? (
-                  <span className={styles.statusSolved}>✓ クリア済み</span>
+                {record?.self_assessment === 'success' ? (
+                  <span className={styles.statusSolved}>✓ できた</span>
+                ) : record?.self_assessment === 'close' ? (
+                  <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>△ 惜しい</span>
+                ) : record?.self_assessment === 'fail' ? (
+                  <span style={{ color: '#ef4444', fontWeight: 'bold' }}>× できなかった</span>
                 ) : (
-                  <span style={{ color: '#94a3b8' }}>未クリア</span>
+                  <span style={{ color: '#94a3b8' }}>未挑戦</span>
                 )}
                 {isWeak && <span className={styles.statusWeak}>⚠️ 苦手</span>}
               </div>
