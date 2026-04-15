@@ -11,7 +11,7 @@ type Problem = {
   level: number
   type: string
   theme_id: string
-  themes: { name: string }
+  themes: { name: string }[]
 }
 
 type StudyRecord = {
@@ -131,7 +131,7 @@ export default function Problems() {
               
               <div className={styles.badgeGroup}>
                 <span className={`${styles.badge} ${styles.badgeTheme}`}>
-                  {problem.themes?.name || 'テーマ未設定'}
+                  {problem.themes?.[0]?.name || 'テーマ未設定'}
                 </span>
                 <span className={`${styles.badge} ${
                   problem.level === 1 ? styles.badgeLevel1 : 
