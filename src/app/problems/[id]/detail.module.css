@@ -1,0 +1,186 @@
+.container {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.backLink {
+  display: inline-block;
+  margin-bottom: 1.5rem;
+  color: var(--primary);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+}
+
+.header {
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.badgeGroup {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.badge {
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  background-color: var(--secondary);
+  border: 1px solid var(--border);
+}
+
+.contentWrapper {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+
+@media (min-width: 1024px) {
+  .contentWrapper {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.section {
+  background-color: var(--secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.sectionTitle {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--primary);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.5rem;
+}
+
+.statement {
+  font-size: 1.125rem;
+  line-height: 1.7;
+  margin-bottom: 1rem;
+}
+
+.requirements {
+  white-space: pre-wrap;
+  color: #d1d5db;
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 1rem;
+  border-radius: calc(var(--radius) / 2);
+}
+
+.editorArea {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.textarea {
+  flex: 1;
+  min-height: 400px;
+  background-color: #1e1e1e; /* VSCode dark */
+  color: #d4d4d4;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  padding: 1rem;
+  border-radius: calc(var(--radius) / 2);
+  border: 1px solid var(--border);
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.actionRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.button {
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius);
+  font-weight: 600;
+  transition: all 0.2s;
+  background-color: var(--secondary-hover);
+  color: var(--foreground);
+}
+
+.button:hover {
+  background-color: var(--primary);
+  color: white;
+}
+
+.saveMessage {
+  font-size: 0.875rem;
+  color: var(--accent);
+}
+
+.answerBox {
+  margin-top: 1.5rem;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.pre {
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  padding: 1rem;
+  border-radius: calc(var(--radius) / 2);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+}
+
+.selfAssessment {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.assessmentButtons {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.btnSuccess { background-color: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #059669; }
+.btnSuccess:hover, .btnSuccess.active { background-color: var(--accent); color: white; }
+
+.btnClose { background-color: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #d97706; }
+.btnClose:hover, .btnClose.active { background-color: var(--warning); color: white; }
+
+.btnFail { background-color: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #b91c1c; }
+.btnFail:hover, .btnFail.active { background-color: var(--danger); color: white; }
+
+.weakToggle {
+  margin-top: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.weakToggle input {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: var(--warning);
+}
