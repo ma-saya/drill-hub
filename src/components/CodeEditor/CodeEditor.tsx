@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic'
 import { indentWithTab } from '@codemirror/commands'
 import { java } from '@codemirror/lang-java'
 import { indentUnit } from '@codemirror/language'
-import { EditorState } from '@codemirror/state'
+import { EditorState, Prec } from '@codemirror/state'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { EditorView, keymap, placeholder } from '@codemirror/view'
 
@@ -62,6 +62,41 @@ type CodeEditorProps = {
   minHeight?: number
 }
 
+const INDENT = '    '
+
+const smartEnter = (view: EditorView) => {
+  const selection = view.state.selection.main
+  if (!selection.empty) return false
+
+  const line = view.state.doc.lineAt(selection.from)
+  const cursorOffset = selection.from - line.from
+  const beforeCursor = line.text.slice(0, cursorOffset)
+  const afterCursor = line.text.slice(cursorOffset)
+  const baseIndent = line.text.match(/^\s*/)?.[0] ?? ''
+  const shouldIndentDeeper = beforeCursor.trimEnd().endsWith('{')
+  const closesBlockImmediately = /^\s*}/.test(afterCursor)
+
+  if (shouldIndentDeeper && closesBlockImmediately) {
+    const insertText = `\n${baseIndent}${INDENT}\n${baseIndent}`
+    const anchor = selection.from + 1 + baseIndent.length + INDENT.length
+
+    view.dispatch({
+      changes: { from: selection.from, to: selection.to, insert: insertText },
+      selection: { anchor },
+      userEvent: 'input',
+    })
+    return true
+  }
+
+  const nextIndent = shouldIndentDeeper ? `${baseIndent}${INDENT}` : baseIndent
+  view.dispatch({
+    changes: { from: selection.from, to: selection.to, insert: `\n${nextIndent}` },
+    selection: { anchor: selection.from + 1 + nextIndent.length },
+    userEvent: 'input',
+  })
+  return true
+}
+
 export default function CodeEditor({
   value,
   onChange,
@@ -72,8 +107,13 @@ export default function CodeEditor({
   const extensions = [
     editorTheme,
     EditorState.tabSize.of(4),
-    indentUnit.of('    '),
-    keymap.of([indentWithTab]),
+    indentUnit.of(INDENT),
+    Prec.highest(
+      keymap.of([
+        { key: 'Enter', run: smartEnter },
+        indentWithTab,
+      ])
+    ),
     placeholder(placeholderText),
   ]
 

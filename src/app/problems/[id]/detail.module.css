@@ -124,6 +124,24 @@
   align-items: center;
 }
 
+.editorActionRow {
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.editorHint {
+  flex: 1 1 260px;
+  min-width: 0;
+  color: #cbd5e1;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.editorActionButtons {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 .button {
   padding: 0.75rem 1.5rem;
   border-radius: var(--radius);
@@ -131,6 +149,7 @@
   transition: all 0.2s;
   background-color: var(--secondary-hover);
   color: var(--foreground);
+  white-space: nowrap;
 }
 
 .button:hover {
@@ -141,6 +160,37 @@
 .saveMessage {
   font-size: 0.875rem;
   color: var(--accent);
+}
+
+.secondaryActionButton,
+.primaryActionButton {
+  min-width: 98px;
+  min-height: 52px;
+  border: 1px solid transparent;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.18);
+}
+
+.secondaryActionButton {
+  background: linear-gradient(180deg, rgba(51, 65, 85, 0.92), rgba(30, 41, 59, 0.96));
+  border-color: rgba(148, 163, 184, 0.18);
+  color: #e2e8f0;
+}
+
+.secondaryActionButton:hover {
+  background: linear-gradient(180deg, rgba(71, 85, 105, 0.96), rgba(51, 65, 85, 0.98));
+  border-color: rgba(96, 165, 250, 0.35);
+  color: #f8fafc;
+}
+
+.primaryActionButton {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  border-color: rgba(96, 165, 250, 0.42);
+  color: #eff6ff;
+}
+
+.primaryActionButton:hover {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
 }
 
 .helperText {
@@ -245,4 +295,16 @@
   width: 1.25rem;
   height: 1.25rem;
   accent-color: var(--warning);
+}
+
+@media (max-width: 768px) {
+  .editorActionButtons {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .secondaryActionButton,
+  .primaryActionButton {
+    flex: 1;
+  }
 }

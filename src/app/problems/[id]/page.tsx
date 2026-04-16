@@ -597,19 +597,27 @@ export default function ProblemDetail() {
             language={editorLanguage}
             minHeight={420}
           />
-          <div className={styles.actionRow}>
-            <span style={{ color: '#cbd5e1', fontSize: '0.875rem' }}>
+          <div className={`${styles.actionRow} ${styles.editorActionRow}`}>
+            <span className={styles.editorHint}>
               {code === savedCode
                 ? 'コードは自動保存されません。'
                 : '未保存のコードがあります。必要なら整えてから保存できます。'}
             </span>
-            <div className={styles.actionButtons}>
+            <div className={`${styles.actionButtons} ${styles.editorActionButtons}`}>
               {editorLanguage === 'java' && (
-                <button type="button" className={styles.button} onClick={handleFormatCode}>
+                <button
+                  type="button"
+                  className={`${styles.button} ${styles.secondaryActionButton}`}
+                  onClick={handleFormatCode}
+                >
                   整える
                 </button>
               )}
-              <button type="button" className={styles.button} onClick={handleSaveCode}>
+              <button
+                type="button"
+                className={`${styles.button} ${styles.primaryActionButton}`}
+                onClick={handleSaveCode}
+              >
                 保存
               </button>
             </div>
