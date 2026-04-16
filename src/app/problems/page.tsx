@@ -80,6 +80,15 @@ export default function Problems() {
   useEffect(() => {
     if (typeof window === 'undefined') return
 
+    const technologyFromQuery = new URLSearchParams(window.location.search).get('technology')?.trim()
+    if (technologyFromQuery) {
+      setFilterTechnology(technologyFromQuery)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
     try {
       const savedPinnedTechnologies = window.localStorage.getItem(PINNED_TECHNOLOGIES_KEY)
       if (!savedPinnedTechnologies) return
@@ -217,6 +226,15 @@ export default function Problems() {
       JSON.stringify(sanitizedPinnedTechnologies)
     )
   }, [hasLoadedPinnedTechnologies, loading, session, pinnedTechnologies, technologyOptions])
+
+  useEffect(() => {
+    if (loading || filterTechnology === 'all') return
+
+    const isValidTechnology = technologyOptions.some((technology) => technology.slug === filterTechnology)
+    if (!isValidTechnology) {
+      setFilterTechnology('all')
+    }
+  }, [filterTechnology, loading, technologyOptions])
 
   const normalizedTechnologyQuery = technologyQuery.trim().toLowerCase()
   const visibleTechnologyOptions = technologyOptions.filter((technology) => {
@@ -462,7 +480,18 @@ export default function Problems() {
           const technology = getTechnologyRecord(problem.themes)
 
           return (
-            <Link href={`/problems/${problem.id}`} key={problem.id} className={`${styles.card} animate-fade-in`}>
+            <Link
+              href={
+                filterTechnology === 'all'
+                  ? `/problems/${problem.id}`
+                  : {
+                      pathname: `/problems/${problem.id}`,
+                      query: { technology: filterTechnology },
+                    }
+              }
+              key={problem.id}
+              className={`${styles.card} animate-fade-in`}
+            >
               <div className={styles.cardHeader}>
                 <h2 className={styles.cardTitle}>{problem.title}</h2>
               </div>

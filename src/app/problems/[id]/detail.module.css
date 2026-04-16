@@ -158,6 +158,41 @@
   font-size: 0.95rem;
 }
 
+.memoSection {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.memoTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.memoTextarea {
+  width: 100%;
+  min-height: 140px;
+  background-color: rgba(15, 23, 42, 0.75);
+  color: #e2e8f0;
+  font-size: 0.95rem;
+  padding: 1rem;
+  border-radius: calc(var(--radius) / 2);
+  border: 1px solid var(--border);
+  resize: vertical;
+  line-height: 1.7;
+}
+
+.memoTextarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.memoHint {
+  color: #cbd5e1;
+  font-size: 0.875rem;
+}
+
 .selfAssessment {
   margin-top: 2rem;
   padding-top: 1.5rem;

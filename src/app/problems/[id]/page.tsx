@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -32,13 +32,61 @@ const getProblemTypeLabel = (type: string) => {
   return '通常記述'
 }
 
+const LEGACY_MANUAL_CODE_PREFIX = '__MANUAL_SAVE__\n'
+const MANUAL_STUDY_CONTENT_PREFIX = '__MANUAL_STUDY_CONTENT__\n'
+
+type SavedStudyContent = {
+  code: string
+  memo: string
+}
+
+const emptySavedStudyContent = (): SavedStudyContent => ({
+  code: '',
+  memo: '',
+})
+
+const decodeSavedStudyContent = (storedCode: string | null | undefined): SavedStudyContent => {
+  if (!storedCode) return emptySavedStudyContent()
+
+  if (storedCode.startsWith(MANUAL_STUDY_CONTENT_PREFIX)) {
+    try {
+      const parsed = JSON.parse(storedCode.slice(MANUAL_STUDY_CONTENT_PREFIX.length))
+
+      return {
+        code: typeof parsed?.code === 'string' ? parsed.code : '',
+        memo: typeof parsed?.memo === 'string' ? parsed.memo : '',
+      }
+    } catch {
+      return emptySavedStudyContent()
+    }
+  }
+
+  if (storedCode.startsWith(LEGACY_MANUAL_CODE_PREFIX)) {
+    return {
+      code: storedCode.slice(LEGACY_MANUAL_CODE_PREFIX.length),
+      memo: '',
+    }
+  }
+
+  return emptySavedStudyContent()
+}
+
+const encodeSavedStudyContent = ({ code, memo }: SavedStudyContent) => {
+  if (code.length === 0 && memo.length === 0) return ''
+  return `${MANUAL_STUDY_CONTENT_PREFIX}${JSON.stringify({ code, memo })}`
+}
+
 export default function ProblemDetail() {
   const params = useParams()
   const id = params.id as string
+  const [returnTechnology, setReturnTechnology] = useState<string | null>(null)
 
   const [problem, setProblem] = useState<ProblemDetailRecord | null>(null)
   const [loading, setLoading] = useState(true)
   const [code, setCode] = useState('')
+  const [savedCode, setSavedCode] = useState('')
+  const [memo, setMemo] = useState('')
+  const [savedMemo, setSavedMemo] = useState('')
   const [showAnswer, setShowAnswer] = useState(false)
   
   const [assessment, setAssessment] = useState<string | null>(null)
@@ -48,8 +96,6 @@ export default function ProblemDetail() {
   
   const [checkResult, setCheckResult] = useState<{ isCorrect: boolean, message: string } | null>(null)
   
-  const autoSaveTimer = useRef<NodeJS.Timeout | null>(null)
-
   useEffect(() => {
     async function loadProblem() {
       setLoading(true)
@@ -94,10 +140,15 @@ export default function ProblemDetail() {
 
         // 穴埋めは空欄だけを入力させる。全文を入れると判定が不安定になるため。
         const defaultCode = ''
+        const defaultMemo = ''
 
         if (localProblem && localProblem.id === id) {
           const localRecord = loadLocalStudyRecord(id)
-          setCode(localRecord?.user_code || defaultCode)
+          const initialSavedContent = decodeSavedStudyContent(localRecord?.user_code)
+          setCode(initialSavedContent.code || defaultCode)
+          setSavedCode(initialSavedContent.code || defaultCode)
+          setMemo(initialSavedContent.memo || defaultMemo)
+          setSavedMemo(initialSavedContent.memo || defaultMemo)
           setAssessment(localRecord?.self_assessment ?? null)
           setIsWeak(localRecord?.is_weak ?? false)
           return
@@ -113,18 +164,24 @@ export default function ProblemDetail() {
             .maybeSingle()
 
           if (recData) {
-            let savedCode = recData.user_code || ''
-            if (savedCode.includes('ここにコードを記述') || savedCode.trim() === '') {
-              savedCode = defaultCode
-            }
-            setCode(savedCode)
+            const initialSavedContent = decodeSavedStudyContent(recData.user_code)
+            setCode(initialSavedContent.code || defaultCode)
+            setSavedCode(initialSavedContent.code || defaultCode)
+            setMemo(initialSavedContent.memo || defaultMemo)
+            setSavedMemo(initialSavedContent.memo || defaultMemo)
             setAssessment(recData.self_assessment)
             setIsWeak(recData.is_weak)
           } else {
             setCode(defaultCode)
+            setSavedCode(defaultCode)
+            setMemo(defaultMemo)
+            setSavedMemo(defaultMemo)
           }
         } else {
           setCode(defaultCode)
+          setSavedCode(defaultCode)
+          setMemo(defaultMemo)
+          setSavedMemo(defaultMemo)
         }
       } catch (err) {
         console.error(err)
@@ -135,6 +192,13 @@ export default function ProblemDetail() {
 
     void loadProblem()
   }, [id])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const technologyFromQuery = new URLSearchParams(window.location.search).get('technology')?.trim()
+    setReturnTechnology(technologyFromQuery || null)
+  }, [])
 
   const theme = getThemeRecord(problem?.themes)
   const technology = getTechnologyRecord(problem?.themes)
@@ -149,13 +213,13 @@ export default function ProblemDetail() {
   // 自動保存ロジック
   const handleCodeChange = (val: string) => {
     setCode(val)
-    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
-    
-    setCheckResult(null) // コードが変わったら判定結果をリセット
-    setSaveStatus('保存中...')
-    autoSaveTimer.current = setTimeout(() => {
-      saveRecord(val, assessment, isWeak)
-    }, 1500)
+    setCheckResult(null)
+    setSaveStatus(null)
+  }
+
+  const handleMemoChange = (val: string) => {
+    setMemo(val)
+    setSaveStatus(null)
   }
 
   // エディター入力補助（括弧の自動補完・Tab対応）
@@ -207,31 +271,36 @@ export default function ProblemDetail() {
 
   const handleAssessment = async (status: string) => {
     setAssessment(status)
-    await saveRecord(code, status, isWeak)
+    await saveRecord(savedCode, savedMemo, status, isWeak)
   }
 
   const handleToggleWeak = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const weak = e.target.checked
     setIsWeak(weak)
-    await saveRecord(code, assessment, weak)
+    await saveRecord(savedCode, savedMemo, assessment, weak)
   }
 
-  const saveRecord = async (userCode: string, selfAssess: string | null, weak: boolean) => {
+  const saveRecord = async (
+    userCode: string,
+    userMemo: string,
+    selfAssess: string | null,
+    weak: boolean
+  ) => {
     if (isLocalProblem) {
       saveLocalStudyRecord(id, {
-        user_code: userCode,
+        user_code: encodeSavedStudyContent({ code: userCode, memo: userMemo }),
         self_assessment: selfAssess,
         is_weak: weak,
         last_studied_at: new Date().toISOString(),
       })
       setSaveStatus('ローカル保存しました')
       setTimeout(() => setSaveStatus(null), 2000)
-      return
+      return true
     }
 
     if (!userId) {
       setSaveStatus('ログインしてください')
-      return
+      return false
     }
     
     try {
@@ -240,7 +309,7 @@ export default function ProblemDetail() {
         .upsert({
           user_id: userId,
           problem_id: id,
-          user_code: userCode,
+          user_code: encodeSavedStudyContent({ code: userCode, memo: userMemo }),
           self_assessment: selfAssess,
           is_weak: weak,
           last_studied_at: new Date().toISOString()
@@ -251,9 +320,25 @@ export default function ProblemDetail() {
       if (error) throw error
       setSaveStatus('保存しました')
       setTimeout(() => setSaveStatus(null), 2000)
+      return true
     } catch (err) {
       console.error(err)
-      setSaveStatus('保存失敗')
+      setSaveStatus('保存に失敗しました')
+      return false
+    }
+  }
+
+  const handleSaveCode = async () => {
+    const didSave = await saveRecord(code, savedMemo, assessment, isWeak)
+    if (didSave) {
+      setSavedCode(code)
+    }
+  }
+
+  const handleSaveMemo = async () => {
+    const didSave = await saveRecord(savedCode, memo, assessment, isWeak)
+    if (didSave) {
+      setSavedMemo(memo)
     }
   }
 
@@ -278,7 +363,16 @@ export default function ProblemDetail() {
 
   return (
     <div className={styles.container}>
-      <Link href="/problems" className={styles.backLink}>← 問題一覧に戻る</Link>
+      <Link
+        href={
+          returnTechnology
+            ? { pathname: '/problems', query: { technology: returnTechnology } }
+            : '/problems'
+        }
+        className={styles.backLink}
+      >
+        ← 問題一覧に戻る
+      </Link>
       
       <div className={`${styles.header} animate-fade-in`}>
         <div className={styles.badgeGroup}>
@@ -374,6 +468,26 @@ export default function ProblemDetail() {
                 </div>
               )}
 
+              <div className={styles.memoSection}>
+                <h3 className={styles.memoTitle}>メモ</h3>
+                <textarea
+                  className={styles.memoTextarea}
+                  value={memo}
+                  onChange={(e) => handleMemoChange(e.target.value)}
+                  placeholder="解説でわからなかったことや、あとで見返したいポイントを書けます"
+                />
+                <div className={styles.actionRow}>
+                  <span className={styles.memoHint}>
+                    {memo === savedMemo
+                      ? 'メモは自動保存されません。'
+                      : '未保存のメモがあります。メモを保存すると残せます。'}
+                  </span>
+                  <button type="button" className={styles.button} onClick={handleSaveMemo}>
+                    メモを保存
+                  </button>
+                </div>
+              </div>
+
               <div className={styles.selfAssessment}>
                 <h3 style={{ fontSize: '1rem', textAlign: 'center' }}>自己評価を記録する</h3>
                 <div className={styles.assessmentButtons}>
@@ -417,6 +531,14 @@ export default function ProblemDetail() {
             spellCheck="false"
             placeholder={inputPlaceholder}
           />
+          <div className={styles.actionRow}>
+            <span style={{ color: '#cbd5e1', fontSize: '0.875rem' }}>
+              {code === savedCode ? 'コードは自動保存されません。' : '未保存の変更があります。保存ボタンで残せます。'}
+            </span>
+            <button type="button" className={styles.button} onClick={handleSaveCode}>
+              保存
+            </button>
+          </div>
         </div>
       </div>
     </div>
