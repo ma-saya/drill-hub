@@ -193,6 +193,20 @@
   font-size: 0.875rem;
 }
 
+.nextProblemRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+}
+
+.nextProblemButton {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 180px;
+}
+
 .selfAssessment {
   margin-top: 2rem;
   padding-top: 1.5rem;

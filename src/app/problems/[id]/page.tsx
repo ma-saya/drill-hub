@@ -8,6 +8,7 @@ import {
   LEGACY_JAVA_TECHNOLOGY,
   findLocalProblem,
   loadLocalStudyRecord,
+  mergeWithLocalProblems,
   saveLocalStudyRecord,
   type ProblemRecord,
   type ThemeRelation,
@@ -38,6 +39,16 @@ const MANUAL_STUDY_CONTENT_PREFIX = '__MANUAL_STUDY_CONTENT__\n'
 type SavedStudyContent = {
   code: string
   memo: string
+}
+
+type NavigableProblem = {
+  id: ProblemRecord['id']
+  title: ProblemRecord['title']
+  level: ProblemRecord['level']
+  type: ProblemRecord['type']
+  theme_id: ProblemRecord['theme_id']
+  themes?: ThemeRelation
+  display_order?: number
 }
 
 const emptySavedStudyContent = (): SavedStudyContent => ({
@@ -82,6 +93,7 @@ export default function ProblemDetail() {
   const [returnTechnology, setReturnTechnology] = useState<string | null>(null)
 
   const [problem, setProblem] = useState<ProblemDetailRecord | null>(null)
+  const [problemSequence, setProblemSequence] = useState<NavigableProblem[]>([])
   const [loading, setLoading] = useState(true)
   const [code, setCode] = useState('')
   const [savedCode, setSavedCode] = useState('')
@@ -137,6 +149,28 @@ export default function ProblemDetail() {
         }
 
         setProblem(probData)
+
+        const problemListResult = await supabase
+          .from('problems')
+          .select('id, title, level, type, theme_id, display_order, themes(name, technology_id, technologies(name, slug))')
+          .order('display_order', { ascending: true })
+
+        if (problemListResult.error) {
+          const fallbackProblemListResult = await supabase
+            .from('problems')
+            .select('id, title, level, type, theme_id, display_order, themes(name)')
+            .order('display_order', { ascending: true })
+
+          if (fallbackProblemListResult.error) throw fallbackProblemListResult.error
+
+          setProblemSequence(
+            mergeWithLocalProblems((fallbackProblemListResult.data || []) as ProblemRecord[]) as NavigableProblem[]
+          )
+        } else {
+          setProblemSequence(
+            mergeWithLocalProblems((problemListResult.data || []) as ProblemRecord[]) as NavigableProblem[]
+          )
+        }
 
         // 穴埋めは空欄だけを入力させる。全文を入れると判定が不安定になるため。
         const defaultCode = ''
@@ -202,6 +236,34 @@ export default function ProblemDetail() {
 
   const theme = getThemeRecord(problem?.themes)
   const technology = getTechnologyRecord(problem?.themes)
+  const navigableProblems = problemSequence
+    .filter((candidate) => {
+      if (!returnTechnology) return true
+
+      const candidateTechnology = getTechnologyRecord(candidate.themes)
+      return candidateTechnology?.slug === returnTechnology
+    })
+    .sort((a, b) => {
+      if (a.level !== b.level) return a.level - b.level
+
+      const orderA = a.display_order ?? Number.MAX_SAFE_INTEGER
+      const orderB = b.display_order ?? Number.MAX_SAFE_INTEGER
+      if (orderA !== orderB) return orderA - orderB
+
+      return a.title.localeCompare(b.title, 'ja')
+    })
+  const currentProblemIndex = navigableProblems.findIndex((candidate) => candidate.id === id)
+  const nextProblemByTechnology =
+    currentProblemIndex >= 0 && currentProblemIndex < navigableProblems.length - 1
+      ? navigableProblems[currentProblemIndex + 1]
+      : null
+  const sameThemeProblems = navigableProblems.filter((candidate) => candidate.theme_id === problem?.theme_id)
+  const currentThemeProblemIndex = sameThemeProblems.findIndex((candidate) => candidate.id === id)
+  const nextProblemByTheme =
+    currentThemeProblemIndex >= 0 && currentThemeProblemIndex < sameThemeProblems.length - 1
+      ? sameThemeProblems[currentThemeProblemIndex + 1]
+      : null
+  const nextProblem = nextProblemByTheme ?? nextProblemByTechnology
   const isFillBlank = problem?.type === 'fill_blank'
   const canAutoCheck = isFillBlank
   const inputLabel = isFillBlank ? '空欄の答え' : 'あなたのコード'
@@ -514,6 +576,21 @@ export default function ProblemDetail() {
                   この問題を「苦手」に登録する
                 </label>
               </div>
+
+              {nextProblem && (
+                <div className={styles.nextProblemRow}>
+                  <Link
+                    href={
+                      returnTechnology
+                        ? { pathname: `/problems/${nextProblem.id}`, query: { technology: returnTechnology } }
+                        : `/problems/${nextProblem.id}`
+                    }
+                    className={`${styles.button} ${styles.nextProblemButton}`}
+                  >
+                    次の問題へ
+                  </Link>
+                </div>
+              )}
             </div>
           )}
         </div>
