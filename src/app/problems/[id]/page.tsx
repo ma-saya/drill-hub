@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -13,6 +13,7 @@ import {
   type ProblemRecord,
   type ThemeRelation,
 } from '@/lib/problemBank'
+import CodeEditor from '@/components/CodeEditor/CodeEditor'
 import styles from './detail.module.css'
 
 type ProblemDetailRecord = ProblemRecord
@@ -30,7 +31,7 @@ const getTechnologyRecord = (themes: ThemeRelation) => {
 
 const getProblemTypeLabel = (type: string) => {
   if (type === 'fill_blank') return '穴埋め'
-  return '通常記述'
+  return '記述'
 }
 
 const LEGACY_MANUAL_CODE_PREFIX = '__MANUAL_SAVE__\n'
@@ -49,6 +50,28 @@ type NavigableProblem = {
   theme_id: ProblemRecord['theme_id']
   themes?: ThemeRelation
   display_order?: number
+}
+
+const formatJavaLikeCode = (source: string) => {
+  const lines = source.replace(/\r\n/g, '\n').split('\n')
+  let indentLevel = 0
+
+  return lines
+    .map((line) => {
+      const trimmed = line.trim()
+      if (!trimmed) return ''
+
+      const leadingClosings = (trimmed.match(/^}+/)?.[0].length ?? 0)
+      indentLevel = Math.max(0, indentLevel - leadingClosings)
+
+      const formattedLine = `${'    '.repeat(indentLevel)}${trimmed}`
+      const openCount = (trimmed.match(/\{/g) ?? []).length
+      const closeCount = (trimmed.match(/\}/g) ?? []).length
+      indentLevel = Math.max(0, indentLevel + openCount - Math.max(0, closeCount - leadingClosings))
+
+      return formattedLine
+    })
+    .join('\n')
 }
 
 const emptySavedStudyContent = (): SavedStudyContent => ({
@@ -172,7 +195,7 @@ export default function ProblemDetail() {
           )
         }
 
-        // 穴埋めは空欄だけを入力させる。全文を入れると判定が不安定になるため。
+        // Start with an empty editor and only restore manually saved study content.
         const defaultCode = ''
         const defaultMemo = ''
 
@@ -268,11 +291,12 @@ export default function ProblemDetail() {
   const canAutoCheck = isFillBlank
   const inputLabel = isFillBlank ? '空欄の答え' : 'あなたのコード'
   const isLocalProblem = problem?.id.startsWith('local-') ?? false
+  const editorLanguage =
+    technology?.slug === 'java' || technology?.slug === 'spring-boot' ? 'java' : 'plain'
   const inputPlaceholder = isFillBlank
-    ? '空欄に入るコードやアノテーションだけを入力してください'
-    : 'ここにコードを入力してください'
+    ? '空欄に入る答えだけを入力してください'
+    : 'ここにコードを書いてください'
 
-  // 自動保存ロジック
   const handleCodeChange = (val: string) => {
     setCode(val)
     setCheckResult(null)
@@ -282,53 +306,6 @@ export default function ProblemDetail() {
   const handleMemoChange = (val: string) => {
     setMemo(val)
     setSaveStatus(null)
-  }
-
-  // エディター入力補助（括弧の自動補完・Tab対応）
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    const target = e.target as HTMLTextAreaElement
-    const { selectionStart, selectionEnd, value } = target
-    
-    const pairs: Record<string, string> = {
-      '(': ')',
-      '{': '}',
-      '[': ']',
-      '"': '"',
-      "'": "'",
-    }
-
-    if (pairs[e.key]) {
-      e.preventDefault()
-      const closingChar = pairs[e.key]
-      const currentSelection = value.substring(selectionStart, selectionEnd)
-      const newValue = value.substring(0, selectionStart) + e.key + currentSelection + closingChar + value.substring(selectionEnd)
-      
-      handleCodeChange(newValue)
-      
-      setTimeout(() => {
-        target.selectionStart = target.selectionEnd = selectionStart + 1
-      }, 0)
-    } else if (e.key === 'Backspace' && selectionStart === selectionEnd && selectionStart > 0) {
-      // セットで消す機能： () {} [] "" '' の間でのBackspaceなら両方消す
-      const prevChar = value[selectionStart - 1]
-      const nextChar = value[selectionStart]
-      if (pairs[prevChar] && pairs[prevChar] === nextChar) {
-        e.preventDefault()
-        const newValue = value.substring(0, selectionStart - 1) + value.substring(selectionEnd + 1)
-        handleCodeChange(newValue)
-        setTimeout(() => {
-          target.selectionStart = target.selectionEnd = selectionStart - 1
-        }, 0)
-      }
-    } else if (e.key === 'Tab') {
-      // Tabキーでスペース4つインデント
-      e.preventDefault()
-      const newValue = value.substring(0, selectionStart) + '    ' + value.substring(selectionEnd)
-      handleCodeChange(newValue)
-      setTimeout(() => {
-        target.selectionStart = target.selectionEnd = selectionStart + 4
-      }, 0)
-    }
   }
 
   const handleAssessment = async (status: string) => {
@@ -404,19 +381,26 @@ export default function ProblemDetail() {
     }
   }
 
-  // 正誤判定ロジック
+  const handleFormatCode = () => {
+    if (editorLanguage !== 'java') return
+
+    setCode(formatJavaLikeCode(code))
+    setSaveStatus(null)
+  }
+
+  // Auto-check is only available for fill-in-the-blank problems.
   const checkCode = () => {
     if (!problem?.answer || !canAutoCheck) return
     const normalize = (str: string) => str.replace(/\s+/g, ' ').trim()
     
     const isCorrect = normalize(code) === normalize(problem.answer)
     if (isCorrect) {
-      setCheckResult({ isCorrect: true, message: '🎉 正解です！完璧なコードです！' })
+      setCheckResult({ isCorrect: true, message: '正解です。とてもいいコードです。' })
       if (assessment !== 'success') {
          handleAssessment('success')
       }
     } else {
-      setCheckResult({ isCorrect: false, message: '🤔 少し違います。模範解答と見比べてみましょう。（※変数名等の違いによる判定ミスの可能性もあります）' })
+      setCheckResult({ isCorrect: false, message: '少し違います。解説や模範解答を見ながら、どこが違うか確認してみましょう。' })
     }
   }
 
@@ -454,7 +438,7 @@ export default function ProblemDetail() {
             
             {problem.requirements && (
               <>
-                <h3 style={{ fontSize: '1rem', marginTop: '1rem', marginBottom: '0.5rem' }}>🎯 要件</h3>
+                <h3 style={{ fontSize: '1rem', marginTop: '1rem', marginBottom: '0.5rem' }}>要件</h3>
                 <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, padding: '1rem', backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '4px' }}>
                   {problem.requirements}
                 </div>
@@ -463,7 +447,7 @@ export default function ProblemDetail() {
             
             {problem.hint && (
               <details style={{ marginTop: '1rem' }}>
-                <summary style={{ cursor: 'pointer', color: 'var(--primary)', fontWeight: 'bold' }}>💡 ヒントを見る</summary>
+                <summary style={{ cursor: 'pointer', color: 'var(--primary)', fontWeight: 'bold' }}>ヒントを見る</summary>
                 <div style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '4px' }}>
                   {problem.hint}
                 </div>
@@ -479,7 +463,7 @@ export default function ProblemDetail() {
                    style={{ backgroundColor: 'var(--primary)', color: 'white', marginRight: '1rem' }}
                    onClick={checkCode}
                  >
-                   ✅ 空欄の答えを判定する
+                    答えを確認する
                  </button>
                )}
                 <button 
@@ -491,8 +475,8 @@ export default function ProblemDetail() {
                 </button>
                 <div className={styles.helperText}>
                   {canAutoCheck
-                    ? '穴埋め問題は空欄に入る答えだけを入力してください。'
-                    : '通常記述問題は自動判定せず、模範解答を見ながら落ち着いて比べられる形にしています。'}
+                    ? '穴埋め問題は、空欄に入る答えだけを入力して確認してください。'
+                    : '記述問題は自分で考えてから、必要なら模範解答を見て学べる形にしています。'}
                 </div>
                 {isLocalProblem && (
                   <div className={styles.helperText}>
@@ -518,14 +502,14 @@ export default function ProblemDetail() {
               
               {problem.explanation && (
                 <div style={{ marginTop: '1.5rem' }}>
-                  <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>📝 解説</h3>
+                  <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>解説</h3>
                   <div style={{ lineHeight: '1.6', color: '#e2e8f0' }}>{problem.explanation}</div>
                 </div>
               )}
               
               {problem.common_mistakes && (
                 <div style={{ marginTop: '1.5rem', backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: '1rem', borderRadius: '4px' }}>
-                  <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', color: '#f87171' }}>⚠️ よくあるミス</h3>
+                  <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', color: '#f87171' }}>よくあるミス</h3>
                   <div>{problem.common_mistakes}</div>
                 </div>
               )}
@@ -556,15 +540,21 @@ export default function ProblemDetail() {
                   <button 
                     className={`${styles.button} ${styles.btnSuccess} ${assessment === 'success' ? styles.active : ''}`}
                     onClick={() => handleAssessment('success')}
-                  >できた</button>
+                  >
+                    できた
+                  </button>
                   <button 
                     className={`${styles.button} ${styles.btnClose} ${assessment === 'close' ? styles.active : ''}`}
                     onClick={() => handleAssessment('close')}
-                  >惜しい</button>
+                  >
+                    惜しい
+                  </button>
                   <button 
                     className={`${styles.button} ${styles.btnFail} ${assessment === 'fail' ? styles.active : ''}`}
                     onClick={() => handleAssessment('fail')}
-                  >できなかった</button>
+                  >
+                    できなかった
+                  </button>
                 </div>
 
                 <label className={styles.weakToggle}>
@@ -600,21 +590,29 @@ export default function ProblemDetail() {
             <span style={{ fontWeight: 600 }}>{inputLabel}</span>
             {saveStatus && <span className={styles.saveMessage}>{saveStatus}</span>}
           </div>
-          <textarea
-            className={styles.textarea}
+          <CodeEditor
             value={code}
-            onChange={(e) => handleCodeChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            spellCheck="false"
-            placeholder={inputPlaceholder}
+            onChange={handleCodeChange}
+            placeholderText={inputPlaceholder}
+            language={editorLanguage}
+            minHeight={420}
           />
           <div className={styles.actionRow}>
             <span style={{ color: '#cbd5e1', fontSize: '0.875rem' }}>
-              {code === savedCode ? 'コードは自動保存されません。' : '未保存の変更があります。保存ボタンで残せます。'}
+              {code === savedCode
+                ? 'コードは自動保存されません。'
+                : '未保存のコードがあります。必要なら整えてから保存できます。'}
             </span>
-            <button type="button" className={styles.button} onClick={handleSaveCode}>
-              保存
-            </button>
+            <div className={styles.actionButtons}>
+              {editorLanguage === 'java' && (
+                <button type="button" className={styles.button} onClick={handleFormatCode}>
+                  整える
+                </button>
+              )}
+              <button type="button" className={styles.button} onClick={handleSaveCode}>
+                保存
+              </button>
+            </div>
           </div>
         </div>
       </div>
