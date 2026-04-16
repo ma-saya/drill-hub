@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { type Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import {
   LEGACY_JAVA_TECHNOLOGY,
@@ -70,6 +71,7 @@ export default function Problems() {
   const [technologyQuery, setTechnologyQuery] = useState('')
   const [pinnedTechnologies, setPinnedTechnologies] = useState<string[]>([])
   const [hasLoadedPinnedTechnologies, setHasLoadedPinnedTechnologies] = useState(false)
+  const [session, setSession] = useState<Session | null>(null)
 
   useEffect(() => {
     void fetchData()
@@ -99,8 +101,9 @@ export default function Problems() {
     setLoading(true)
     try {
       const {
-        data: { session },
+        data: { session: currentSession },
       } = await supabase.auth.getSession()
+      setSession(currentSession)
 
       const enhancedProblemsResult = await supabase
         .from('problems')
@@ -120,11 +123,11 @@ export default function Problems() {
       }
 
       const localRecordSummaries = loadLocalStudyRecordSummaries()
-      if (session) {
+      if (currentSession) {
         const { data: recordsData, error: recordsError } = await supabase
           .from('study_records')
           .select('problem_id, self_assessment, is_weak')
-          .eq('user_id', session.user.id)
+          .eq('user_id', currentSession.user.id)
 
         if (recordsError) throw recordsError
 
@@ -133,6 +136,20 @@ export default function Problems() {
           recordMap[record.problem_id] = record
         })
         setRecords(recordMap)
+
+        // ログイン中はSupabaseから固定技術を取得してlocalStorageの値を上書き
+        const { data: settingsData, error: settingsError } = await supabase
+          .from('user_settings')
+          .select('pinned_technologies')
+          .eq('user_id', currentSession.user.id)
+          .single()
+
+        // PGRST116 = Row not found（新規ユーザーは正常）
+        if (!settingsError || settingsError.code === 'PGRST116') {
+          if (settingsData?.pinned_technologies && Array.isArray(settingsData.pinned_technologies)) {
+            setPinnedTechnologies(settingsData.pinned_technologies)
+          }
+        }
       } else {
         setRecords(localRecordSummaries)
       }
@@ -172,21 +189,34 @@ export default function Problems() {
   const technologyOptions = technologyStats
 
   useEffect(() => {
-    if (!hasLoadedPinnedTechnologies || typeof window === 'undefined') return
+    // loading中はtechnologyOptionsがまだ空のため、固定が削除されないようスキップする
+    if (!hasLoadedPinnedTechnologies || loading || typeof window === 'undefined') return
 
     const validTechnologySlugs = new Set(technologyOptions.map((technology) => technology.slug))
     const sanitizedPinnedTechnologies = pinnedTechnologies.filter((slug) => validTechnologySlugs.has(slug))
 
     if (sanitizedPinnedTechnologies.length !== pinnedTechnologies.length) {
+      // 無効なslugを除去してから保存
       setPinnedTechnologies(sanitizedPinnedTechnologies)
+      // 常にlocalStorageに保存（フォールバック）
+      window.localStorage.setItem(PINNED_TECHNOLOGIES_KEY, JSON.stringify(sanitizedPinnedTechnologies))
+      // ログイン中はSupabaseにも保存
+      if (session) {
+        void supabase.from('user_settings').upsert({
+          user_id: session.user.id,
+          pinned_technologies: sanitizedPinnedTechnologies,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' })
+      }
       return
     }
 
+    // 常にlocalStorageに保存（ログイン中のSupabase保存はtoggle時に行う）
     window.localStorage.setItem(
       PINNED_TECHNOLOGIES_KEY,
       JSON.stringify(sanitizedPinnedTechnologies)
     )
-  }, [hasLoadedPinnedTechnologies, pinnedTechnologies, technologyOptions])
+  }, [hasLoadedPinnedTechnologies, loading, session, pinnedTechnologies, technologyOptions])
 
   const normalizedTechnologyQuery = technologyQuery.trim().toLowerCase()
   const visibleTechnologyOptions = technologyOptions.filter((technology) => {
@@ -203,13 +233,25 @@ export default function Problems() {
     .filter((technology): technology is TechnologyStats => technology !== null)
 
   const togglePinnedTechnology = (slug: string) => {
-    setPinnedTechnologies((current) => {
-      if (current.includes(slug)) {
-        return current.filter((item) => item !== slug)
-      }
+    const next = pinnedTechnologies.includes(slug)
+      ? pinnedTechnologies.filter((item) => item !== slug)
+      : [...pinnedTechnologies, slug]
 
-      return [...current, slug]
-    })
+    setPinnedTechnologies(next)
+
+    // 常にlocalStorageに保存（Supabaseが未準備でも壊れないフォールバック）
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(PINNED_TECHNOLOGIES_KEY, JSON.stringify(next))
+    }
+
+    // ログイン中はSupabaseにも保存（別デバイスで同期するため）
+    if (session) {
+      void supabase.from('user_settings').upsert({
+        user_id: session.user.id,
+        pinned_technologies: next,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' })
+    }
   }
 
   const filteredProblems = problems
@@ -222,11 +264,17 @@ export default function Problems() {
       if (filterStatus === 'weak') {
         return records[problem.id]?.is_weak === true
       }
-      if (filterStatus === 'unsolved') {
-        return !records[problem.id] || records[problem.id].self_assessment !== 'success'
+      if (filterStatus === 'unattempted') {
+        return !records[problem.id] || !records[problem.id].self_assessment
       }
-      if (filterStatus === 'solved') {
+      if (filterStatus === 'success') {
         return records[problem.id]?.self_assessment === 'success'
+      }
+      if (filterStatus === 'close') {
+        return records[problem.id]?.self_assessment === 'close'
+      }
+      if (filterStatus === 'fail') {
+        return records[problem.id]?.self_assessment === 'fail'
       }
 
       return true
@@ -396,8 +444,10 @@ export default function Problems() {
               onChange={(e) => setFilterStatus(e.target.value)}
             >
               <option value="all">すべての状態</option>
-              <option value="unsolved">未クリア</option>
-              <option value="solved">クリア済み</option>
+              <option value="unattempted">未学習</option>
+              <option value="success">できた</option>
+              <option value="close">惜しい</option>
+              <option value="fail">できなかった</option>
               <option value="weak">苦手のみ</option>
             </select>
           </div>
