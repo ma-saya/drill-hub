@@ -42,6 +42,7 @@ function getLevel(count: number) {
 export default function MyPage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
+  const [isGuest, setIsGuest] = useState(false)
   const [stats, setStats] = useState({
     totalAttempted: 0,
     success: 0,
@@ -57,18 +58,35 @@ export default function MyPage() {
   useEffect(() => {
     const loadData = async () => {
       const { data: { session } } = await supabase.auth.getSession()
+      const isGuestMode = localStorage.getItem('tech-drill-guest-mode') === 'true'
 
-      if (!session) {
+      if (!session && !isGuestMode) {
         router.push('/login')
         return
       }
 
-      setUser(session.user)
+      setUser(session?.user ?? null)
+      setIsGuest(isGuestMode && !session)
 
-      const { data: records } = await supabase
-        .from('study_records')
-        .select('*')
-        .eq('user_id', session.user.id)
+      let records: any[] = []
+
+      if (session) {
+        const { data } = await supabase
+          .from('study_records')
+          .select('*')
+          .eq('user_id', session.user.id)
+        records = data ?? []
+      } else if (isGuestMode) {
+        const localData = localStorage.getItem('tech-drill-local-records-v1')
+        if (localData) {
+          try {
+            const parsed = JSON.parse(localData)
+            records = Object.values(parsed)
+          } catch (e) {
+            console.error('Failed to parse local records', e)
+          }
+        }
+      }
 
       if (records) {
         setStats({
@@ -119,7 +137,7 @@ export default function MyPage() {
   }, [router])
 
   if (loading) return <div className={styles.container}>読み込み中...</div>
-  if (!user) return null
+  if (!user && !isGuest) return null
 
   const DAYS = ['日', '月', '火', '水', '木', '金', '土']
 
@@ -129,8 +147,8 @@ export default function MyPage() {
 
       <div className={`${styles.card} animate-fade-in`}>
         <div className={styles.userInfo}>
-          <h2 style={{ color: '#94a3b8', fontSize: '1rem' }}>ログイン中のアカウント</h2>
-          <div className={styles.email}>{user.email}</div>
+          <h2 style={{ color: '#94a3b8', fontSize: '1rem' }}>{user ? 'ログイン中のアカウント' : 'ゲストモード'}</h2>
+          <div className={styles.email}>{user ? user.email : 'ゲストユーザー（ブラウザ保存）'}</div>
         </div>
 
         <h2 className={styles.recentTitle}>学習サマリー</h2>

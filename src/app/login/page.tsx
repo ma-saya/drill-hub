@@ -11,8 +11,11 @@ export default function Login() {
   const [isSignUp, setIsSignUp] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [passcode, setPasscode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  const GUEST_PASSCODE = 'Tech-Study'
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -26,8 +29,6 @@ export default function Login() {
           password,
         })
         if (error) throw error
-        // Supabaseの設定によってはメール確認が必要な場合がありますが、
-        // 今回の簡略化のためそのままログインさせるかメッセージを出します
         alert('登録が完了しました！そのままログインできます。')
         setIsSignUp(false)
       } else {
@@ -36,6 +37,9 @@ export default function Login() {
           password,
         })
         if (error) throw error
+        
+        // ログイン成功時はゲストモードを解除
+        localStorage.removeItem('tech-drill-guest-mode')
         router.push('/')
         router.refresh()
       }
@@ -47,6 +51,19 @@ export default function Login() {
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleGuestEntry = (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+
+    if (passcode === GUEST_PASSCODE) {
+      localStorage.setItem('tech-drill-guest-mode', 'true')
+      router.push('/problems')
+      router.refresh()
+    } else {
+      setError('合言葉が正しくありません。')
     }
   }
 
@@ -103,6 +120,28 @@ export default function Login() {
           >
             {isSignUp ? 'ログイン' : '新規登録'}
           </button>
+        </div>
+
+        <div className={styles.divider}>
+          <span>または</span>
+        </div>
+
+        <div className={styles.guestSection}>
+          <h2 className={styles.guestTitle}>ゲストとして入室する</h2>
+          <p className={styles.guestDesc}>お試し用の合言葉を入力してください</p>
+          <form onSubmit={handleGuestEntry} className={styles.form}>
+            <input
+              type="text"
+              placeholder="合言葉を入力"
+              value={passcode}
+              onChange={(e) => setPasscode(e.target.value)}
+              className={styles.input}
+              style={{ marginBottom: '1rem' }}
+            />
+            <button type="submit" className={styles.button} style={{ background: 'var(--secondary)', border: '1px solid var(--border)' }}>
+              ゲスト入室
+            </button>
+          </form>
         </div>
       </div>
     </div>

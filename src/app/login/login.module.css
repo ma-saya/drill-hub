@@ -101,10 +101,51 @@
 }
 
 .error {
+  margin-bottom: 1.5rem;
   color: var(--danger);
   font-size: 0.875rem;
   background-color: rgba(239, 68, 68, 0.1);
   padding: 0.75rem;
   border-radius: var(--radius);
   border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 2rem 0;
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--border);
+}
+
+.divider span {
+  padding: 0 0.75rem;
+}
+
+.guestSection {
+  background-color: var(--background);
+  padding: 1.5rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.guestTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--foreground);
+  margin-bottom: 0.25rem;
+}
+
+.guestDesc {
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  margin-bottom: 1rem;
 }
