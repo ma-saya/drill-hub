@@ -2,42 +2,48 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { type Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import styles from './page.module.css'
 
 const DAILY_GOAL = 3 // 1日の目標問題数
 
 export default function Home() {
-  const [session, setSession] = useState<any>(null)
+  const [session, setSession] = useState<Session | null>(null)
   const [stats, setStats] = useState({
     totalSolved: 0,
     weakCount: 0,
-    themeCount: 5,
+    technologyCount: 1,
   })
   const [streak, setStreak] = useState(0)
   const [todayCount, setTodayCount] = useState(0)
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      if (session) {
-        fetchStats(session.user.id)
-      }
-    })
-  }, [])
+  async function fetchStats(userId: string) {
+    const [recordsResult, technologiesResult] = await Promise.all([
+      supabase
+        .from('study_records')
+        .select('self_assessment, is_weak, last_studied_at')
+        .eq('user_id', userId),
+      supabase
+        .from('technologies')
+        .select('id')
+        .eq('is_active', true),
+    ])
 
-  const fetchStats = async (userId: string) => {
-    const { data: records, error } = await supabase
-      .from('study_records')
-      .select('self_assessment, is_weak, last_studied_at')
-      .eq('user_id', userId)
-
-    if (error) {
-      console.error(error)
+    if (recordsResult.error) {
+      console.error(recordsResult.error)
       return
     }
 
-    if (records) {
+    if (!technologiesResult.error && technologiesResult.data) {
+      setStats(prev => ({
+        ...prev,
+        technologyCount: technologiesResult.data.length || 1,
+      }))
+    }
+
+    if (recordsResult.data) {
+      const records = recordsResult.data
       const solved = records.filter(r => r.self_assessment === 'success').length
       const weak = records.filter(r => r.is_weak).length
       setStats(prev => ({ ...prev, totalSolved: solved, weakCount: weak }))
@@ -75,16 +81,25 @@ export default function Home() {
     }
   }
 
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      if (session) {
+        fetchStats(session.user.id)
+      }
+    })
+  }, [])
+
   const todayProgress = Math.min((todayCount / DAILY_GOAL) * 100, 100)
   const goalAchieved = todayCount >= DAILY_GOAL
 
   return (
     <div className={styles.container}>
       <div className={`${styles.hero} animate-fade-in`}>
-        <h1 className={styles.title}>Javaの実装力を、書くことで鍛える。</h1>
+        <h1 className={styles.title}>技術の実装力を、書くことで鍛える。</h1>
         <p className={styles.subtitle}>
-          コードを読み、実際に書き、模範解答と比較する。<br/>
-          研修卒業レベルの「自分で作る力」を身につけるための特化型学習アプリです。
+          コードや設計の基本を読み、実際に書き、模範解答と比較する。<br/>
+          Javaを土台に、Spring Bootのような周辺技術へも段階的に広げられる学習アプリです。
         </p>
       </div>
 
@@ -136,8 +151,8 @@ export default function Home() {
               <div className={styles.statLabel}>苦手な問題</div>
             </div>
             <div className={styles.statCard}>
-              <div className={styles.statValue}>{stats.themeCount}</div>
-              <div className={styles.statLabel}>学習テーマ</div>
+              <div className={styles.statValue}>{stats.technologyCount}</div>
+              <div className={styles.statLabel}>学習技術</div>
             </div>
           </div>
 
@@ -160,4 +175,3 @@ export default function Home() {
     </div>
   )
 }
-

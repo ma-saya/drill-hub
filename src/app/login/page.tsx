@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { AuthError } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import styles from './login.module.css'
 
@@ -38,8 +39,12 @@ export default function Login() {
         router.push('/')
         router.refresh()
       }
-    } catch (err: any) {
-      setError(err.message || '認証エラーが発生しました。')
+    } catch (err: unknown) {
+      if (err instanceof AuthError) {
+        setError(err.message)
+      } else {
+        setError('認証エラーが発生しました。')
+      }
     } finally {
       setLoading(false)
     }

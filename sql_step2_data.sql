@@ -1,8 +1,11 @@
-INSERT INTO themes (id, name, description, display_order) VALUES ('11111111-1111-1111-1111-111111111111', 'TODOアプリ基礎', 'クラス、フィールド、コンストラクタ、CRUD処理', 1);
-INSERT INTO themes (id, name, description, display_order) VALUES ('22222222-2222-2222-2222-222222222222', 'ユーザー管理', 'バリデーション、重複判定、条件分岐', 2);
-INSERT INTO themes (id, name, description, display_order) VALUES ('33333333-3333-3333-3333-333333333333', 'コレクション / Stream', 'filter, map, sorted, 集計', 3);
-INSERT INTO themes (id, name, description, display_order) VALUES ('44444444-4444-4444-4444-444444444444', 'ファイル / JSON', '文字列整形、入出力の概念', 4);
-INSERT INTO themes (id, name, description, display_order) VALUES ('55555555-5555-5555-5555-555555555555', '疑似業務設計', 'DTO, Service, Repository, 責務分割', 5);
+INSERT INTO technologies (id, name, slug, description, display_order, is_active) VALUES ('90000000-0000-0000-0000-000000000001', 'Java', 'java', 'Java基礎の実装問題', 1, true);
+INSERT INTO technologies (id, name, slug, description, display_order, is_active) VALUES ('90000000-0000-0000-0000-000000000002', 'Spring Boot', 'spring-boot', 'Spring Boot入門の実装問題', 2, true);
+
+INSERT INTO themes (id, technology_id, name, description, display_order) VALUES ('11111111-1111-1111-1111-111111111111', '90000000-0000-0000-0000-000000000001', 'TODOアプリ基礎', 'クラス、フィールド、コンストラクタ、CRUD処理', 1);
+INSERT INTO themes (id, technology_id, name, description, display_order) VALUES ('22222222-2222-2222-2222-222222222222', '90000000-0000-0000-0000-000000000001', 'ユーザー管理', 'バリデーション、重複判定、条件分岐', 2);
+INSERT INTO themes (id, technology_id, name, description, display_order) VALUES ('33333333-3333-3333-3333-333333333333', '90000000-0000-0000-0000-000000000001', 'コレクション / Stream', 'filter, map, sorted, 集計', 3);
+INSERT INTO themes (id, technology_id, name, description, display_order) VALUES ('44444444-4444-4444-4444-444444444444', '90000000-0000-0000-0000-000000000001', 'ファイル / JSON', '文字列整形、入出力の概念', 4);
+INSERT INTO themes (id, technology_id, name, description, display_order) VALUES ('55555555-5555-5555-5555-555555555555', '90000000-0000-0000-0000-000000000001', '疑似業務設計', 'DTO, Service, Repository, 責務分割', 5);
 
 INSERT INTO problems (theme_id, title, level, type, statement, requirements, hint, answer, explanation, common_mistakes, display_order) VALUES ('11111111-1111-1111-1111-111111111111', 'Taskクラスの作成', 1, 'normal', 'TODOアプリで扱うTaskクラスを作成してください。', 'id (int), title (String), isCompleted (boolean) のフィールドを持つこと。全フィールドを初期化するコンストラクタを持つこと。', 'アクセス修飾子は private にし、getter/setterは省略してよいです。', E'public class Task {\n    private int id;\n    private String title;\n    private boolean isCompleted;\n\n    public Task(int id, String title, boolean isCompleted) {\n        this.id = id;\n        this.title = title;\n        this.isCompleted = isCompleted;\n    }\n}', 'クラスの基本的な構成を理解するための問題です。', 'thisをつけ忘れるミス', 1);
 

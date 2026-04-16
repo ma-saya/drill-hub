@@ -4,13 +4,39 @@ import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import {
+  LEGACY_JAVA_TECHNOLOGY,
+  findLocalProblem,
+  loadLocalStudyRecord,
+  saveLocalStudyRecord,
+  type ProblemRecord,
+  type ThemeRelation,
+} from '@/lib/problemBank'
 import styles from './detail.module.css'
+
+type ProblemDetailRecord = ProblemRecord
+
+const getThemeRecord = (themes: ThemeRelation) => Array.isArray(themes) ? (themes[0] ?? null) : (themes ?? null)
+const getTechnologyRecord = (themes: ThemeRelation) => {
+  const theme = getThemeRecord(themes)
+  const technologies = theme?.technologies
+  const technology = Array.isArray(technologies) ? (technologies[0] ?? null) : (technologies ?? null)
+
+  if (!technology && theme?.name) return LEGACY_JAVA_TECHNOLOGY
+
+  return technology
+}
+
+const getProblemTypeLabel = (type: string) => {
+  if (type === 'fill_blank') return '穴埋め'
+  return '通常記述'
+}
 
 export default function ProblemDetail() {
   const params = useParams()
   const id = params.id as string
 
-  const [problem, setProblem] = useState<any>(null)
+  const [problem, setProblem] = useState<ProblemDetailRecord | null>(null)
   const [loading, setLoading] = useState(true)
   const [code, setCode] = useState('')
   const [showAnswer, setShowAnswer] = useState(false)
@@ -25,61 +51,100 @@ export default function ProblemDetail() {
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    fetchProblem()
-  }, [id])
+    async function loadProblem() {
+      setLoading(true)
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const uId = session?.user?.id
+        setUserId(uId || null)
 
-  const fetchProblem = async () => {
-    setLoading(true)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const uId = session?.user?.id
-      setUserId(uId || null)
+        // Try the multi-technology schema first, then gracefully fall back.
+        let probData: ProblemDetailRecord | null = null
+        const localProblem = findLocalProblem(id)
 
-      // Fetch problem details
-      const { data: probData, error: probError } = await supabase
-        .from('problems')
-        .select('*, themes(name)')
-        .eq('id', id)
-        .single()
-
-      if (probError) throw probError
-      setProblem(probData)
-
-      // Initial code for fill-in-the-blank
-      const defaultCode = probData.type === 'fill_blank' 
-        ? probData.statement.includes('_______') ? probData.statement : '// コードを入力してください\n'
-        : '' // 通常問題の場合は初期テキストを空にする
-
-      // Fetch study record if exists
-      if (uId) {
-        const { data: recData, error: recError } = await supabase
-          .from('study_records')
-          .select('*')
-          .eq('user_id', uId)
-          .eq('problem_id', id)
+        const detailedResult = await supabase
+          .from('problems')
+          .select('*, themes(name, technology_id, technologies(name, slug))')
+          .eq('id', id)
           .single()
 
-        if (recData) {
-          let savedCode = recData.user_code || ''
-          // DBに「ここにコードを記述」という文字が含まれて入っていれば、邪魔なので強制的に消す
-          if (savedCode.includes('ここにコードを記述') || savedCode.trim() === '') {
-             savedCode = defaultCode
+        if (detailedResult.error) {
+          const fallbackResult = await supabase
+            .from('problems')
+            .select('*, themes(name)')
+            .eq('id', id)
+            .maybeSingle()
+
+          if (fallbackResult.data) {
+            probData = fallbackResult.data as ProblemDetailRecord
+          } else if (localProblem) {
+            probData = localProblem
+          } else if (fallbackResult.error) {
+            throw fallbackResult.error
           }
-          setCode(savedCode)
-          setAssessment(recData.self_assessment)
-          setIsWeak(recData.is_weak)
+        } else {
+          probData = detailedResult.data as ProblemDetailRecord
+        }
+
+        if (!probData && localProblem) {
+          probData = localProblem
+        }
+
+        setProblem(probData)
+
+        // 穴埋めは空欄だけを入力させる。全文を入れると判定が不安定になるため。
+        const defaultCode = ''
+
+        if (localProblem && localProblem.id === id) {
+          const localRecord = loadLocalStudyRecord(id)
+          setCode(localRecord?.user_code || defaultCode)
+          setAssessment(localRecord?.self_assessment ?? null)
+          setIsWeak(localRecord?.is_weak ?? false)
+          return
+        }
+
+        // Fetch study record if exists
+        if (uId) {
+          const { data: recData } = await supabase
+            .from('study_records')
+            .select('*')
+            .eq('user_id', uId)
+            .eq('problem_id', id)
+            .maybeSingle()
+
+          if (recData) {
+            let savedCode = recData.user_code || ''
+            if (savedCode.includes('ここにコードを記述') || savedCode.trim() === '') {
+              savedCode = defaultCode
+            }
+            setCode(savedCode)
+            setAssessment(recData.self_assessment)
+            setIsWeak(recData.is_weak)
+          } else {
+            setCode(defaultCode)
+          }
         } else {
           setCode(defaultCode)
         }
-      } else {
-        setCode(defaultCode)
+      } catch (err) {
+        console.error(err)
+      } finally {
+        setLoading(false)
       }
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
     }
-  }
+
+    void loadProblem()
+  }, [id])
+
+  const theme = getThemeRecord(problem?.themes)
+  const technology = getTechnologyRecord(problem?.themes)
+  const isFillBlank = problem?.type === 'fill_blank'
+  const canAutoCheck = isFillBlank
+  const inputLabel = isFillBlank ? '空欄の答え' : 'あなたのコード'
+  const isLocalProblem = problem?.id.startsWith('local-') ?? false
+  const inputPlaceholder = isFillBlank
+    ? '空欄に入るコードやアノテーションだけを入力してください'
+    : 'ここにコードを入力してください'
 
   // 自動保存ロジック
   const handleCodeChange = (val: string) => {
@@ -152,6 +217,18 @@ export default function ProblemDetail() {
   }
 
   const saveRecord = async (userCode: string, selfAssess: string | null, weak: boolean) => {
+    if (isLocalProblem) {
+      saveLocalStudyRecord(id, {
+        user_code: userCode,
+        self_assessment: selfAssess,
+        is_weak: weak,
+        last_studied_at: new Date().toISOString(),
+      })
+      setSaveStatus('ローカル保存しました')
+      setTimeout(() => setSaveStatus(null), 2000)
+      return
+    }
+
     if (!userId) {
       setSaveStatus('ログインしてください')
       return
@@ -182,7 +259,7 @@ export default function ProblemDetail() {
 
   // 正誤判定ロジック
   const checkCode = () => {
-    if (!problem?.answer) return
+    if (!problem?.answer || !canAutoCheck) return
     const normalize = (str: string) => str.replace(/\s+/g, ' ').trim()
     
     const isCorrect = normalize(code) === normalize(problem.answer)
@@ -205,9 +282,10 @@ export default function ProblemDetail() {
       
       <div className={`${styles.header} animate-fade-in`}>
         <div className={styles.badgeGroup}>
-          <span className={styles.badge}>{problem.themes?.name}</span>
+          {technology?.name && <span className={styles.badge}>{technology.name}</span>}
+          <span className={styles.badge}>{theme?.name || 'テーマ未設定'}</span>
           <span className={styles.badge}>Lv.{problem.level}</span>
-          <span className={styles.badge}>{problem.type === 'fill_blank' ? '穴埋め' : '通常記述'}</span>
+          <span className={styles.badge}>{getProblemTypeLabel(problem.type)}</span>
         </div>
         <h1 className={styles.title}>{problem.title}</h1>
       </div>
@@ -239,23 +317,35 @@ export default function ProblemDetail() {
 
           {!showAnswer ? (
              <div className={styles.section} style={{ textAlign: 'center' }}>
-               <button 
-                 className={styles.button} 
-                 style={{ backgroundColor: 'var(--primary)', color: 'white', marginRight: '1rem' }}
-                 onClick={checkCode}
-               >
-                 ✅ 書いたコードを判定する
-               </button>
-               <button 
-                 className={styles.button} 
-                 style={{ backgroundColor: 'var(--secondary)', color: 'white', border: '1px solid var(--border)' }}
-                 onClick={() => setShowAnswer(true)}
-               >
-                 模範解答を見る
-               </button>
-               {checkResult && (
-                 <div style={{ 
-                   marginTop: '1rem', 
+               {canAutoCheck && (
+                 <button 
+                   className={styles.button} 
+                   style={{ backgroundColor: 'var(--primary)', color: 'white', marginRight: '1rem' }}
+                   onClick={checkCode}
+                 >
+                   ✅ 空欄の答えを判定する
+                 </button>
+               )}
+                <button 
+                  className={styles.button} 
+                  style={{ backgroundColor: 'var(--secondary)', color: 'white', border: '1px solid var(--border)' }}
+                  onClick={() => setShowAnswer(true)}
+                >
+                  模範解答を見る
+                </button>
+                <div className={styles.helperText}>
+                  {canAutoCheck
+                    ? '穴埋め問題は空欄に入る答えだけを入力してください。'
+                    : '通常記述問題は自動判定せず、模範解答を見ながら落ち着いて比べられる形にしています。'}
+                </div>
+                {isLocalProblem && (
+                  <div className={styles.helperText}>
+                    この追加問題セットは、いまはローカル保存で使える状態にしています。
+                  </div>
+                )}
+                {checkResult && (
+                  <div style={{ 
+                    marginTop: '1rem', 
                    padding: '1rem', 
                    borderRadius: '4px',
                    backgroundColor: checkResult.isCorrect ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
@@ -316,7 +406,7 @@ export default function ProblemDetail() {
 
         <div className={`${styles.editorArea} animate-fade-in`} style={{ animationDelay: '0.2s' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-            <span style={{ fontWeight: 600 }}>あなたのコード</span>
+            <span style={{ fontWeight: 600 }}>{inputLabel}</span>
             {saveStatus && <span className={styles.saveMessage}>{saveStatus}</span>}
           </div>
           <textarea
@@ -325,6 +415,7 @@ export default function ProblemDetail() {
             onChange={(e) => handleCodeChange(e.target.value)}
             onKeyDown={handleKeyDown}
             spellCheck="false"
+            placeholder={inputPlaceholder}
           />
         </div>
       </div>

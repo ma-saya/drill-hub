@@ -14,14 +14,198 @@
   margin-bottom: 1rem;
 }
 
+.progressOverview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.progressCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.78));
+}
+
+.progressLabel {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #93c5fd;
+}
+
+.progressValue {
+  font-size: 1.5rem;
+  line-height: 1.1;
+}
+
+.progressMeta {
+  font-size: 0.88rem;
+  color: #cbd5e1;
+}
+
 .filterBar {
   display: flex;
   gap: 1rem;
   flex-wrap: wrap;
+  align-items: flex-start;
   background-color: var(--secondary);
   padding: 1rem;
   border-radius: var(--radius);
   border: 1px solid var(--border);
+}
+
+.technologyFilterSection {
+  flex: 1 1 520px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.filterSectionHeader {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.filterLabel {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.searchInput {
+  flex: 1 1 220px;
+  min-width: 180px;
+  padding: 0.65rem 0.9rem;
+  border-radius: calc(var(--radius) / 2);
+  background-color: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  outline: none;
+}
+
+.searchInput:focus {
+  border-color: var(--primary);
+}
+
+.pinnedRow {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.technologyChip {
+  padding: 0.45rem 0.8rem;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background-color: var(--background);
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+}
+
+.technologyChip:hover {
+  border-color: var(--primary);
+}
+
+.technologyChipActive {
+  background-color: rgba(59, 130, 246, 0.16);
+  border-color: rgba(96, 165, 250, 0.7);
+  color: #bfdbfe;
+}
+
+.technologyList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.technologyItem {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.technologyOptionButton {
+  padding: 0.6rem 0.85rem;
+  border-radius: calc(var(--radius) / 2);
+  border: 1px solid var(--border);
+  background-color: var(--background);
+  color: var(--foreground);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+}
+
+.technologyOptionButton:hover {
+  border-color: var(--primary);
+}
+
+.technologyOptionButtonActive {
+  background-color: rgba(59, 130, 246, 0.18);
+  border-color: rgba(96, 165, 250, 0.75);
+  color: #dbeafe;
+}
+
+.technologyMeta {
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.pinButton {
+  padding: 0.45rem 0.7rem;
+  border-radius: calc(var(--radius) / 2);
+  border: 1px solid var(--border);
+  background-color: transparent;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.pinButton:hover {
+  border-color: var(--primary);
+  color: var(--foreground);
+}
+
+.pinButtonActive {
+  background-color: rgba(251, 191, 36, 0.12);
+  border-color: rgba(251, 191, 36, 0.45);
+  color: #fcd34d;
+}
+
+.emptyTechnologyMessage {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.875rem;
+}
+
+.secondaryFilters {
+  flex: 0 0 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .filterSelect {
@@ -113,4 +297,28 @@
 
 .statusWeak {
   color: var(--warning);
+}
+
+@media (max-width: 720px) {
+  .container {
+    padding: 1rem;
+  }
+
+  .secondaryFilters {
+    flex: 1 1 100%;
+  }
+
+  .technologyFilterSection {
+    flex-basis: 100%;
+  }
+
+  .technologyItem {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .technologyOptionButton {
+    flex: 1 1 auto;
+    text-align: left;
+  }
 }

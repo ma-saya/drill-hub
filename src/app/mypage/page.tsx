@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { type User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import styles from './mypage.module.css'
 
@@ -40,7 +41,7 @@ function getLevel(count: number) {
 
 export default function MyPage() {
   const router = useRouter()
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [stats, setStats] = useState({
     totalAttempted: 0,
     success: 0,

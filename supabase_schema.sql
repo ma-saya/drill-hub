@@ -1,13 +1,26 @@
--- 1. テーマ (themes) テーブル
+-- 1. 技術 (technologies) テーブル
+CREATE TABLE technologies (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    description TEXT,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 2. テーマ (themes) テーブル
 CREATE TABLE themes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    technology_id UUID REFERENCES technologies(id) ON DELETE RESTRICT,
     name TEXT NOT NULL,
     description TEXT,
     display_order INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 2. 問題 (problems) テーブル
+-- 3. 問題 (problems) テーブル
 CREATE TABLE problems (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     theme_id UUID REFERENCES themes(id) ON DELETE CASCADE,
@@ -26,7 +39,7 @@ CREATE TABLE problems (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 3. 学習記録 (study_records) テーブル
+-- 4. 学習記録 (study_records) テーブル
 CREATE TABLE study_records (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -43,10 +56,12 @@ CREATE TABLE study_records (
 
 -- Row Level Security (RLS) の有効化とポリシー設定
 
--- テーマと問題は全員(ゲスト含む)が読み取り可能
+-- 技術・テーマ・問題は全員(ゲスト含む)が読み取り可能
+ALTER TABLE technologies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE themes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE problems ENABLE ROW LEVEL SECURITY;
 
+CREATE POLICY "Allow public read access on technologies" ON technologies FOR SELECT USING (true);
 CREATE POLICY "Allow public read access on themes" ON themes FOR SELECT USING (true);
 CREATE POLICY "Allow public read access on problems" ON problems FOR SELECT USING (true);
 
@@ -66,13 +81,22 @@ ON study_records FOR SELECT
 USING (auth.uid() = user_id);
 
 -- シードデータ（初期データ）の投入 --
--- 1. テーマの投入
-INSERT INTO themes (id, name, description, display_order) VALUES
-('11111111-1111-1111-1111-111111111111', 'テーマ1: TODOアプリ基礎', 'クラス、フィールド、コンストラクタ、CRUD処理', 1),
-('22222222-2222-2222-2222-222222222222', 'テーマ2: ユーザー管理', 'バリデーション、重複判定、条件分岐', 2),
-('33333333-3333-3333-3333-333333333333', 'テーマ3: コレクション / Stream', 'filter, map, sorted, 集計', 3),
-('44444444-4444-4444-4444-444444444444', 'テーマ4: ファイル / JSON', '文字列整形、入出力の概念', 4),
-('55555555-5555-5555-5555-555555555555', 'テーマ5: 疑似業務設計', 'DTO, Service, Repository, 責務分割', 5);
+-- 1. 技術の投入
+INSERT INTO technologies (id, name, slug, description, display_order) VALUES
+('90000000-0000-0000-0000-000000000001', 'Java', 'java', 'Java基礎の実装問題', 1),
+('90000000-0000-0000-0000-000000000002', 'Spring Boot', 'spring-boot', 'Spring Boot入門の実装問題', 2);
+
+-- 2. テーマの投入
+INSERT INTO themes (id, technology_id, name, description, display_order) VALUES
+('11111111-1111-1111-1111-111111111111', '90000000-0000-0000-0000-000000000001', 'テーマ1: TODOアプリ基礎', 'クラス、フィールド、コンストラクタ、CRUD処理', 1),
+('22222222-2222-2222-2222-222222222222', '90000000-0000-0000-0000-000000000001', 'テーマ2: ユーザー管理', 'バリデーション、重複判定、条件分岐', 2),
+('33333333-3333-3333-3333-333333333333', '90000000-0000-0000-0000-000000000001', 'テーマ3: コレクション / Stream', 'filter, map, sorted, 集計', 3),
+('44444444-4444-4444-4444-444444444444', '90000000-0000-0000-0000-000000000001', 'テーマ4: ファイル / JSON', '文字列整形、入出力の概念', 4),
+('55555555-5555-5555-5555-555555555555', '90000000-0000-0000-0000-000000000001', 'テーマ5: 疑似業務設計', 'DTO, Service, Repository, 責務分割', 5),
+('66666666-6666-6666-6666-000000000001', '90000000-0000-0000-0000-000000000002', 'Spring Boot: Controller基礎', 'Controllerとルーティングの基本', 6),
+('66666666-6666-6666-6666-000000000002', '90000000-0000-0000-0000-000000000002', 'Spring Boot: Request / Response', 'リクエスト受け取りとレスポンス返却の基本', 7),
+('66666666-6666-6666-6666-000000000003', '90000000-0000-0000-0000-000000000002', 'Spring Boot: Service / Repository', 'サービス層とデータアクセス層の基礎', 8),
+('66666666-6666-6666-6666-000000000004', '90000000-0000-0000-0000-000000000002', 'Spring Boot: Validation / Exception', '入力検証と例外ハンドリングの基礎', 9);
 
 -- 2. 問題の投入 (サンプル各1問ずつ)
 INSERT INTO problems (theme_id, title, level, type, statement, requirements, hint, answer, explanation, common_mistakes, display_order) VALUES

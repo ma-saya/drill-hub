@@ -75,6 +75,7 @@
   font-size: 1.125rem;
   line-height: 1.7;
   margin-bottom: 1rem;
+  white-space: pre-wrap;
 }
 
 .requirements {
@@ -134,6 +135,12 @@
 .saveMessage {
   font-size: 0.875rem;
   color: var(--accent);
+}
+
+.helperText {
+  margin-top: 1rem;
+  color: #cbd5e1;
+  line-height: 1.6;
 }
 
 .answerBox {

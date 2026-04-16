@@ -7,8 +7,8 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-sans' })
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' })
 
 export const metadata: Metadata = {
-  title: 'Java Drill Hub',
-  description: 'Java学習者のための実装特化型学習アプリ',
+  title: 'Tech Drill Hub',
+  description: '初学者向けの実装特化型学習アプリ',
 }
 
 export default function RootLayout({

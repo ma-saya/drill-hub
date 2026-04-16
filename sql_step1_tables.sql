@@ -1,5 +1,17 @@
+CREATE TABLE technologies (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    description TEXT,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 CREATE TABLE themes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    technology_id UUID REFERENCES technologies(id) ON DELETE RESTRICT,
     name TEXT NOT NULL,
     description TEXT,
     display_order INTEGER NOT NULL DEFAULT 0,
@@ -38,10 +50,12 @@ CREATE TABLE study_records (
     UNIQUE(user_id, problem_id)
 );
 
+ALTER TABLE technologies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE themes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE problems ENABLE ROW LEVEL SECURITY;
 ALTER TABLE study_records ENABLE ROW LEVEL SECURITY;
 
+CREATE POLICY "Allow public read access on technologies" ON technologies FOR SELECT USING (true);
 CREATE POLICY "Allow public read access on themes" ON themes FOR SELECT USING (true);
 CREATE POLICY "Allow public read access on problems" ON problems FOR SELECT USING (true);
 CREATE POLICY "Users can create their own study records" ON study_records FOR INSERT WITH CHECK (auth.uid() = user_id);
