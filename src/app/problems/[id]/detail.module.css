@@ -50,7 +50,9 @@
 
 @media (min-width: 1024px) {
   .contentWrapper {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(520px, 1fr) minmax(520px, 1fr);
+    min-width: 1072px;
+    align-items: start;
   }
 }
 
