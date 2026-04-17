@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import {
+  compareProblemsByListOrder,
   LEGACY_JAVA_TECHNOLOGY,
   findLocalProblem,
   loadLocalStudyRecord,
@@ -17,6 +18,8 @@ import CodeEditor from '@/components/CodeEditor/CodeEditor'
 import styles from './detail.module.css'
 
 type ProblemDetailRecord = ProblemRecord
+const PROBLEM_NAV_CONTEXT_KEY = 'problem-nav-context-v1'
+const RANDOM_NEXT_MODE_KEY = 'problem-random-next-mode-v1'
 
 const getThemeRecord = (themes: ThemeRelation) => Array.isArray(themes) ? (themes[0] ?? null) : (themes ?? null)
 const getTechnologyRecord = (themes: ThemeRelation) => {
@@ -114,6 +117,11 @@ export default function ProblemDetail() {
   const params = useParams()
   const id = params.id as string
   const [returnTechnology, setReturnTechnology] = useState<string | null>(null)
+  const [returnLevel, setReturnLevel] = useState<string | null>(null)
+  const [returnStatus, setReturnStatus] = useState<string | null>(null)
+  const [navigationProblemIds, setNavigationProblemIds] = useState<string[] | null>(null)
+  const [isRandomNextMode, setIsRandomNextMode] = useState(false)
+  const [randomNextProblemId, setRandomNextProblemId] = useState<string | null>(null)
 
   const [problem, setProblem] = useState<ProblemDetailRecord | null>(null)
   const [problemSequence, setProblemSequence] = useState<NavigableProblem[]>([])
@@ -253,40 +261,112 @@ export default function ProblemDetail() {
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    const technologyFromQuery = new URLSearchParams(window.location.search).get('technology')?.trim()
+    const searchParams = new URLSearchParams(window.location.search)
+    const technologyFromQuery = searchParams.get('technology')?.trim()
+    const levelFromQuery = searchParams.get('level')?.trim()
+    const statusFromQuery = searchParams.get('status')?.trim()
+
     setReturnTechnology(technologyFromQuery || null)
+    setReturnLevel(levelFromQuery || null)
+    setReturnStatus(statusFromQuery || null)
   }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    setIsRandomNextMode(window.localStorage.getItem(RANDOM_NEXT_MODE_KEY) === 'on')
+  }, [])
+
+  const buildProblemsListHref = () => {
+    const query: Record<string, string> = {}
+
+    if (returnTechnology) query.technology = returnTechnology
+    if (returnLevel) query.level = returnLevel
+    if (returnStatus) query.status = returnStatus
+
+    if (Object.keys(query).length === 0) {
+      return '/problems'
+    }
+
+    return {
+      pathname: '/problems',
+      query,
+    }
+  }
+
+  const buildNextProblemHref = (problemId: string) => {
+    const query: Record<string, string> = {}
+
+    if (returnTechnology) query.technology = returnTechnology
+    if (returnLevel) query.level = returnLevel
+    if (returnStatus) query.status = returnStatus
+
+    if (Object.keys(query).length === 0) {
+      return `/problems/${problemId}`
+    }
+
+    return {
+      pathname: `/problems/${problemId}`,
+      query,
+    }
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    try {
+      const rawNavigationContext = window.sessionStorage.getItem(PROBLEM_NAV_CONTEXT_KEY)
+      if (!rawNavigationContext) {
+        setNavigationProblemIds(null)
+        return
+      }
+
+      const parsedNavigationContext = JSON.parse(rawNavigationContext)
+      if (!Array.isArray(parsedNavigationContext?.problemIds)) {
+        setNavigationProblemIds(null)
+        return
+      }
+
+      const validProblemIds = parsedNavigationContext.problemIds.filter(
+        (problemId: unknown): problemId is string => typeof problemId === 'string'
+      )
+
+      setNavigationProblemIds(validProblemIds)
+    } catch {
+      setNavigationProblemIds(null)
+    }
+  }, [id])
 
   const theme = getThemeRecord(problem?.themes)
   const technology = getTechnologyRecord(problem?.themes)
-  const navigableProblems = problemSequence
-    .filter((candidate) => {
-      if (!returnTechnology) return true
+  const navigationProblemOrder =
+    navigationProblemIds && navigationProblemIds.includes(id)
+      ? new Map(navigationProblemIds.map((problemId, index) => [problemId, index]))
+      : null
+  const navigableProblems = navigationProblemOrder
+    ? problemSequence
+        .filter((candidate) => navigationProblemOrder.has(candidate.id))
+        .sort((a, b) => (navigationProblemOrder.get(a.id) ?? 0) - (navigationProblemOrder.get(b.id) ?? 0))
+    : problemSequence
+        .filter((candidate) => {
+          if (!returnTechnology) return true
 
-      const candidateTechnology = getTechnologyRecord(candidate.themes)
-      return candidateTechnology?.slug === returnTechnology
-    })
-    .sort((a, b) => {
-      if (a.level !== b.level) return a.level - b.level
-
-      const orderA = a.display_order ?? Number.MAX_SAFE_INTEGER
-      const orderB = b.display_order ?? Number.MAX_SAFE_INTEGER
-      if (orderA !== orderB) return orderA - orderB
-
-      return a.title.localeCompare(b.title, 'ja')
-    })
+          const candidateTechnology = getTechnologyRecord(candidate.themes)
+          return candidateTechnology?.slug === returnTechnology
+        })
+        .sort(compareProblemsByListOrder)
   const currentProblemIndex = navigableProblems.findIndex((candidate) => candidate.id === id)
-  const nextProblemByTechnology =
+  const sequentialNextProblem =
     currentProblemIndex >= 0 && currentProblemIndex < navigableProblems.length - 1
       ? navigableProblems[currentProblemIndex + 1]
       : null
-  const sameThemeProblems = navigableProblems.filter((candidate) => candidate.theme_id === problem?.theme_id)
-  const currentThemeProblemIndex = sameThemeProblems.findIndex((candidate) => candidate.id === id)
-  const nextProblemByTheme =
-    currentThemeProblemIndex >= 0 && currentThemeProblemIndex < sameThemeProblems.length - 1
-      ? sameThemeProblems[currentThemeProblemIndex + 1]
-      : null
-  const nextProblem = nextProblemByTheme ?? nextProblemByTechnology
+  const randomCandidateProblems = navigableProblems.filter((candidate) => candidate.id !== id)
+  const randomCandidateSignature = randomCandidateProblems.map((candidate) => candidate.id).join(',')
+  const randomNextProblem = randomNextProblemId
+    ? randomCandidateProblems.find((candidate) => candidate.id === randomNextProblemId) ?? null
+    : null
+  const nextProblem = isRandomNextMode ? randomNextProblem : sequentialNextProblem
+  const canNavigateToAnotherProblem = Boolean(sequentialNextProblem) || randomCandidateProblems.length > 0
   const isFillBlank = problem?.type === 'fill_blank'
   const canAutoCheck = isFillBlank
   const inputLabel = isFillBlank ? '空欄の答え' : 'あなたのコード'
@@ -306,6 +386,15 @@ export default function ProblemDetail() {
   const handleMemoChange = (val: string) => {
     setMemo(val)
     setSaveStatus(null)
+  }
+
+  const handleToggleRandomNextMode = () => {
+    const nextMode = !isRandomNextMode
+    setIsRandomNextMode(nextMode)
+
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(RANDOM_NEXT_MODE_KEY, nextMode ? 'on' : 'off')
+    }
   }
 
   const handleAssessment = async (status: string) => {
@@ -404,17 +493,30 @@ export default function ProblemDetail() {
     }
   }
 
+  useEffect(() => {
+    if (!isRandomNextMode) {
+      setRandomNextProblemId(null)
+      return
+    }
+
+    if (randomCandidateProblems.length === 0) {
+      setRandomNextProblemId(null)
+      return
+    }
+
+    const nextRandomProblem =
+      randomCandidateProblems[Math.floor(Math.random() * randomCandidateProblems.length)]
+
+    setRandomNextProblemId(nextRandomProblem.id)
+  }, [id, isRandomNextMode, randomCandidateSignature])
+
   if (loading) return <div className={styles.container}>読み込み中...</div>
   if (!problem) return <div className={styles.container}>問題が見つかりません。</div>
 
   return (
     <div className={styles.container}>
       <Link
-        href={
-          returnTechnology
-            ? { pathname: '/problems', query: { technology: returnTechnology } }
-            : '/problems'
-        }
+        href={buildProblemsListHref()}
         className={styles.backLink}
       >
         ← 問題一覧に戻る
@@ -567,18 +669,23 @@ export default function ProblemDetail() {
                 </label>
               </div>
 
-              {nextProblem && (
+              {canNavigateToAnotherProblem && (
                 <div className={styles.nextProblemRow}>
-                  <Link
-                    href={
-                      returnTechnology
-                        ? { pathname: `/problems/${nextProblem.id}`, query: { technology: returnTechnology } }
-                        : `/problems/${nextProblem.id}`
-                    }
-                    className={`${styles.button} ${styles.nextProblemButton}`}
+                  <button
+                    type="button"
+                    className={`${styles.randomToggleButton} ${isRandomNextMode ? styles.randomToggleButtonActive : ''}`}
+                    onClick={handleToggleRandomNextMode}
                   >
-                    次の問題へ
-                  </Link>
+                    ランダム: {isRandomNextMode ? 'ON' : 'OFF'}
+                  </button>
+                  {nextProblem && (
+                    <Link
+                      href={buildNextProblemHref(nextProblem.id)}
+                      className={`${styles.button} ${styles.nextProblemButton}`}
+                    >
+                      {isRandomNextMode ? 'ランダムで次へ' : '次の問題へ'}
+                    </Link>
+                  )}
                 </div>
               )}
             </div>

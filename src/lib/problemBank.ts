@@ -6301,6 +6301,19 @@ export function mergeWithLocalProblems(remoteProblems: ProblemRecord[]) {
   )
 }
 
+export function compareProblemsByListOrder(
+  a: Pick<ProblemRecord, 'level' | 'title'> & { display_order?: number | null },
+  b: Pick<ProblemRecord, 'level' | 'title'> & { display_order?: number | null }
+) {
+  if (a.level !== b.level) return a.level - b.level
+
+  const orderA = a.display_order ?? Number.MAX_SAFE_INTEGER
+  const orderB = b.display_order ?? Number.MAX_SAFE_INTEGER
+  if (orderA !== orderB) return orderA - orderB
+
+  return a.title.localeCompare(b.title, 'ja')
+}
+
 export function findLocalProblem(problemId: string) {
   return LOCAL_ADDITIONAL_PROBLEMS.find((problem) => problem.id === problemId) ?? null
 }

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { type Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import {
+  compareProblemsByListOrder,
   LEGACY_JAVA_TECHNOLOGY,
   type ProblemRecord,
   type StudyRecordSummary,
@@ -15,6 +16,7 @@ import {
 import styles from './problems.module.css'
 
 const PINNED_TECHNOLOGIES_KEY = 'tech-drill-pinned-technologies-v1'
+const PROBLEM_NAV_CONTEXT_KEY = 'problem-nav-context-v1'
 
 const getThemeRecord = (themes: ThemeRelation) =>
   Array.isArray(themes) ? (themes[0] ?? null) : (themes ?? null)
@@ -80,9 +82,21 @@ export default function Problems() {
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    const technologyFromQuery = new URLSearchParams(window.location.search).get('technology')?.trim()
+    const searchParams = new URLSearchParams(window.location.search)
+    const technologyFromQuery = searchParams.get('technology')?.trim()
+    const levelFromQuery = searchParams.get('level')?.trim()
+    const statusFromQuery = searchParams.get('status')?.trim()
+
     if (technologyFromQuery) {
       setFilterTechnology(technologyFromQuery)
+    }
+
+    if (levelFromQuery) {
+      setFilterLevel(levelFromQuery)
+    }
+
+    if (statusFromQuery) {
+      setFilterStatus(statusFromQuery)
     }
   }, [])
 
@@ -297,15 +311,37 @@ export default function Problems() {
 
       return true
     })
-    .sort((a, b) => {
-      if (a.level !== b.level) return a.level - b.level
+    .sort(compareProblemsByListOrder)
+  const filteredProblemIds = filteredProblems.map((problem) => problem.id)
 
-      const orderA = a.display_order ?? Number.MAX_SAFE_INTEGER
-      const orderB = b.display_order ?? Number.MAX_SAFE_INTEGER
-      if (orderA !== orderB) return orderA - orderB
+  const saveProblemNavigationContext = () => {
+    if (typeof window === 'undefined') return
 
-      return a.title.localeCompare(b.title, 'ja')
-    })
+    window.sessionStorage.setItem(
+      PROBLEM_NAV_CONTEXT_KEY,
+      JSON.stringify({
+        problemIds: filteredProblemIds,
+        savedAt: new Date().toISOString(),
+      })
+    )
+  }
+
+  const buildProblemHref = (problemId: string) => {
+    const query: Record<string, string> = {}
+
+    if (filterTechnology !== 'all') query.technology = filterTechnology
+    if (filterLevel !== 'all') query.level = filterLevel
+    if (filterStatus !== 'all') query.status = filterStatus
+
+    if (Object.keys(query).length === 0) {
+      return `/problems/${problemId}`
+    }
+
+    return {
+      pathname: `/problems/${problemId}`,
+      query,
+    }
+  }
 
   const totalProblemCount = problems.length
   const solvedProblemCount = problems.filter(
@@ -481,16 +517,10 @@ export default function Problems() {
 
           return (
             <Link
-              href={
-                filterTechnology === 'all'
-                  ? `/problems/${problem.id}`
-                  : {
-                      pathname: `/problems/${problem.id}`,
-                      query: { technology: filterTechnology },
-                    }
-              }
+              href={buildProblemHref(problem.id)}
               key={problem.id}
               className={`${styles.card} animate-fade-in`}
+              onClick={saveProblemNavigationContext}
             >
               <div className={styles.cardHeader}>
                 <h2 className={styles.cardTitle}>{problem.title}</h2>
