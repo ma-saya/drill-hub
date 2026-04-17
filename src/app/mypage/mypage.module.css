@@ -76,6 +76,75 @@
   padding-top: 1rem;
 }
 
+.goalRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.goalValue {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.goalHint {
+  margin-top: 0.35rem;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.goalControls {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.goalInput {
+  width: 96px;
+  padding: 0.8rem 0.9rem;
+  border-radius: calc(var(--radius) / 2);
+  border: 1px solid var(--border);
+  background-color: var(--background);
+  color: var(--foreground);
+  font-size: 1rem;
+}
+
+.goalInput:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.goalButton {
+  padding: 0.8rem 1.2rem;
+  border-radius: calc(var(--radius) / 1.5);
+  background-color: var(--primary);
+  color: white;
+  font-weight: 700;
+  transition: filter 0.2s ease, transform 0.2s ease;
+}
+
+.goalButton:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.goalButton:disabled {
+  cursor: default;
+  filter: none;
+  transform: none;
+  opacity: 0.7;
+}
+
+.goalSaveMessage {
+  margin-top: 0.9rem;
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
 /* ---- 学習カレンダー ---- */
 .calendarTitle {
   font-size: 1rem;
