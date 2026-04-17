@@ -91,7 +91,19 @@
 .editorArea {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  align-self: start;
+  position: relative;
+}
+
+.editorStickyPanel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.editorStickyPanelFixed {
+  position: fixed;
+  z-index: 30;
 }
 
 .textarea {

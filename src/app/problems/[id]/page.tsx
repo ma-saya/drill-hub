@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -116,6 +116,9 @@ const encodeSavedStudyContent = ({ code, memo }: SavedStudyContent) => {
 export default function ProblemDetail() {
   const params = useParams()
   const id = params.id as string
+  const contentWrapperRef = useRef<HTMLDivElement | null>(null)
+  const editorAreaRef = useRef<HTMLDivElement | null>(null)
+  const editorStickyPanelRef = useRef<HTMLDivElement | null>(null)
   const [returnTechnology, setReturnTechnology] = useState<string | null>(null)
   const [returnLevel, setReturnLevel] = useState<string | null>(null)
   const [returnStatus, setReturnStatus] = useState<string | null>(null)
@@ -136,6 +139,9 @@ export default function ProblemDetail() {
   const [isWeak, setIsWeak] = useState(false)
   const [saveStatus, setSaveStatus] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
+  const [editorPanelHeight, setEditorPanelHeight] = useState<number | null>(null)
+  const [editorDockMode, setEditorDockMode] = useState<'static' | 'fixed'>('static')
+  const [editorDockStyle, setEditorDockStyle] = useState<React.CSSProperties>({})
   
   const [checkResult, setCheckResult] = useState<{ isCorrect: boolean, message: string } | null>(null)
   
@@ -510,6 +516,77 @@ export default function ProblemDetail() {
     setRandomNextProblemId(nextRandomProblem.id)
   }, [id, isRandomNextMode, randomCandidateSignature])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const contentWrapper = contentWrapperRef.current
+    const editorArea = editorAreaRef.current
+    const editorStickyPanel = editorStickyPanelRef.current
+
+    const updateEditorDock = () => {
+      if (!contentWrapper || !editorArea || !editorStickyPanel || window.innerWidth < 1024) {
+        setEditorDockMode('static')
+        setEditorDockStyle({})
+        setEditorPanelHeight(null)
+        return
+      }
+
+      const headerHeight = document.querySelector('header')?.getBoundingClientRect().height ?? 0
+      const topOffset = headerHeight + 24
+      const editorAreaRect = editorArea.getBoundingClientRect()
+      const editorPanelRect = editorStickyPanel.getBoundingClientRect()
+      const nextPanelHeight = Math.ceil(editorPanelRect.height)
+
+      setEditorPanelHeight((currentHeight) => currentHeight === nextPanelHeight ? currentHeight : nextPanelHeight)
+
+      if (editorAreaRect.top > topOffset) {
+        setEditorDockMode('static')
+        setEditorDockStyle({})
+        return
+      }
+
+      setEditorDockMode('fixed')
+      setEditorDockStyle({
+        top: `${topOffset}px`,
+        left: `${editorAreaRect.left}px`,
+        width: `${editorAreaRect.width}px`,
+      })
+    }
+
+    updateEditorDock()
+
+    let frameId: number | null = null
+    const scheduleUpdate = () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId)
+      }
+
+      frameId = window.requestAnimationFrame(() => {
+        updateEditorDock()
+        frameId = null
+      })
+    }
+
+    window.addEventListener('scroll', scheduleUpdate, { passive: true })
+    window.addEventListener('resize', scheduleUpdate)
+
+    const resizeObserver = new ResizeObserver(scheduleUpdate)
+    resizeObserver.observe(document.body)
+    if (contentWrapper) resizeObserver.observe(contentWrapper)
+    if (editorArea) resizeObserver.observe(editorArea)
+    if (editorStickyPanel) resizeObserver.observe(editorStickyPanel)
+
+    return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId)
+      }
+
+      window.removeEventListener('scroll', scheduleUpdate)
+      window.removeEventListener('resize', scheduleUpdate)
+      resizeObserver.disconnect()
+    }
+  }, [showAnswer, checkResult, saveStatus, inputLabel, inputPlaceholder, editorLanguage])
+
   if (loading) return <div className={styles.container}>読み込み中...</div>
   if (!problem) return <div className={styles.container}>問題が見つかりません。</div>
 
@@ -532,7 +609,7 @@ export default function ProblemDetail() {
         <h1 className={styles.title}>{problem.title}</h1>
       </div>
 
-      <div className={styles.contentWrapper}>
+      <div className={styles.contentWrapper} ref={contentWrapperRef}>
         <div className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
           <div className={styles.section}>
             <h2 className={styles.sectionTitle}>問題文</h2>
@@ -692,41 +769,57 @@ export default function ProblemDetail() {
           )}
         </div>
 
-        <div className={`${styles.editorArea} animate-fade-in`} style={{ animationDelay: '0.2s' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-            <span style={{ fontWeight: 600 }}>{inputLabel}</span>
-            {saveStatus && <span className={styles.saveMessage}>{saveStatus}</span>}
-          </div>
-          <CodeEditor
-            value={code}
-            onChange={handleCodeChange}
-            placeholderText={inputPlaceholder}
-            language={editorLanguage}
-            minHeight={420}
-          />
-          <div className={`${styles.actionRow} ${styles.editorActionRow}`}>
-            <span className={styles.editorHint}>
-              {code === savedCode
-                ? 'コードは自動保存されません。'
-                : '未保存のコードがあります。必要なら整えてから保存できます。'}
-            </span>
-            <div className={`${styles.actionButtons} ${styles.editorActionButtons}`}>
-              {editorLanguage === 'java' && (
+        <div
+          ref={editorAreaRef}
+          className={styles.editorArea}
+          style={{
+            minHeight: editorPanelHeight ? `${editorPanelHeight}px` : undefined,
+          }}
+        >
+          <div
+            ref={editorStickyPanelRef}
+            className={`${styles.editorStickyPanel} ${
+              editorDockMode === 'fixed'
+                ? styles.editorStickyPanelFixed
+                : ''
+            }`}
+            style={editorDockStyle}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+              <span style={{ fontWeight: 600 }}>{inputLabel}</span>
+              {saveStatus && <span className={styles.saveMessage}>{saveStatus}</span>}
+            </div>
+            <CodeEditor
+              value={code}
+              onChange={handleCodeChange}
+              placeholderText={inputPlaceholder}
+              language={editorLanguage}
+              minHeight={420}
+            />
+            <div className={`${styles.actionRow} ${styles.editorActionRow}`}>
+              <span className={styles.editorHint}>
+                {code === savedCode
+                  ? 'コードは自動保存されません。'
+                  : '未保存のコードがあります。必要なら整えてから保存できます。'}
+              </span>
+              <div className={`${styles.actionButtons} ${styles.editorActionButtons}`}>
+                {editorLanguage === 'java' && (
+                  <button
+                    type="button"
+                    className={`${styles.button} ${styles.secondaryActionButton}`}
+                    onClick={handleFormatCode}
+                  >
+                    整える
+                  </button>
+                )}
                 <button
                   type="button"
-                  className={`${styles.button} ${styles.secondaryActionButton}`}
-                  onClick={handleFormatCode}
+                  className={`${styles.button} ${styles.primaryActionButton}`}
+                  onClick={handleSaveCode}
                 >
-                  整える
+                  保存
                 </button>
-              )}
-              <button
-                type="button"
-                className={`${styles.button} ${styles.primaryActionButton}`}
-                onClick={handleSaveCode}
-              >
-                保存
-              </button>
+              </div>
             </div>
           </div>
         </div>
