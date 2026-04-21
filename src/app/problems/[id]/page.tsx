@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -345,28 +345,38 @@ export default function ProblemDetail() {
 
   const theme = getThemeRecord(problem?.themes)
   const technology = getTechnologyRecord(problem?.themes)
-  const navigationProblemOrder =
-    navigationProblemIds && navigationProblemIds.includes(id)
-      ? new Map(navigationProblemIds.map((problemId, index) => [problemId, index]))
-      : null
-  const navigableProblems = navigationProblemOrder
-    ? problemSequence
-        .filter((candidate) => navigationProblemOrder.has(candidate.id))
-        .sort((a, b) => (navigationProblemOrder.get(a.id) ?? 0) - (navigationProblemOrder.get(b.id) ?? 0))
-    : problemSequence
-        .filter((candidate) => {
-          if (!returnTechnology) return true
+  const navigationProblemOrder = useMemo(
+    () =>
+      navigationProblemIds && navigationProblemIds.includes(id)
+        ? new Map(navigationProblemIds.map((problemId, index) => [problemId, index]))
+        : null,
+    [id, navigationProblemIds]
+  )
+  const navigableProblems = useMemo(
+    () =>
+      navigationProblemOrder
+        ? problemSequence
+            .filter((candidate) => navigationProblemOrder.has(candidate.id))
+            .sort((a, b) => (navigationProblemOrder.get(a.id) ?? 0) - (navigationProblemOrder.get(b.id) ?? 0))
+        : problemSequence
+            .filter((candidate) => {
+              if (!returnTechnology) return true
 
-          const candidateTechnology = getTechnologyRecord(candidate.themes)
-          return candidateTechnology?.slug === returnTechnology
-        })
-        .sort(compareProblemsByListOrder)
+              const candidateTechnology = getTechnologyRecord(candidate.themes)
+              return candidateTechnology?.slug === returnTechnology
+            })
+            .sort(compareProblemsByListOrder),
+    [navigationProblemOrder, problemSequence, returnTechnology]
+  )
   const currentProblemIndex = navigableProblems.findIndex((candidate) => candidate.id === id)
   const sequentialNextProblem =
     currentProblemIndex >= 0 && currentProblemIndex < navigableProblems.length - 1
       ? navigableProblems[currentProblemIndex + 1]
       : null
-  const randomCandidateProblems = navigableProblems.filter((candidate) => candidate.id !== id)
+  const randomCandidateProblems = useMemo(
+    () => navigableProblems.filter((candidate) => candidate.id !== id),
+    [id, navigableProblems]
+  )
   const randomCandidateSignature = randomCandidateProblems.map((candidate) => candidate.id).join(',')
   const randomNextProblem = randomNextProblemId
     ? randomCandidateProblems.find((candidate) => candidate.id === randomNextProblemId) ?? null
@@ -514,7 +524,7 @@ export default function ProblemDetail() {
       randomCandidateProblems[Math.floor(Math.random() * randomCandidateProblems.length)]
 
     setRandomNextProblemId(nextRandomProblem.id)
-  }, [id, isRandomNextMode, randomCandidateSignature])
+  }, [id, isRandomNextMode, randomCandidateProblems, randomCandidateSignature])
 
   useEffect(() => {
     if (typeof window === 'undefined') return

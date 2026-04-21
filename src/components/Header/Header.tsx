@@ -10,20 +10,15 @@ import { User } from '@supabase/supabase-js'
 export default function Header() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
-  const [isGuest, setIsGuest] = useState(false)
-
-  const checkStatus = async () => {
-    // Supabaseセッション確認
-    const { data: { session } } = await supabase.auth.getSession()
-    setUser(session?.user ?? null)
-
-    // ゲストモード確認
-    const guestMode = localStorage.getItem('tech-drill-guest-mode') === 'true'
-    setIsGuest(guestMode)
-  }
+  const [isGuest, setIsGuest] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('tech-drill-guest-mode') === 'true'
+  })
 
   useEffect(() => {
-    checkStatus()
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+    })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
