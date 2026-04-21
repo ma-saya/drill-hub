@@ -38,6 +38,7 @@ export type StudyRecordSummary = {
   problem_id: string
   self_assessment: string
   is_weak: boolean
+  is_favorite?: boolean
 }
 
 type LocalStudyRecord = {
@@ -45,6 +46,7 @@ type LocalStudyRecord = {
   user_code: string
   self_assessment: string | null
   is_weak: boolean
+  is_favorite?: boolean
   last_studied_at: string
 }
 
@@ -6349,6 +6351,7 @@ export function loadLocalStudyRecordSummaries(): Record<string, StudyRecordSumma
         problem_id: record.problem_id,
         self_assessment: record.self_assessment ?? '',
         is_weak: record.is_weak,
+        is_favorite: record.is_favorite ?? false,
       },
     ])
   )
@@ -6366,6 +6369,7 @@ export function saveLocalStudyRecord(
     user_code: update.user_code ?? previous?.user_code ?? '',
     self_assessment: update.self_assessment ?? previous?.self_assessment ?? null,
     is_weak: update.is_weak ?? previous?.is_weak ?? false,
+    is_favorite: update.is_favorite ?? previous?.is_favorite ?? false,
     last_studied_at: update.last_studied_at ?? new Date().toISOString(),
   }
 

@@ -12,10 +12,12 @@ import {
   type ThemeRelation,
   loadLocalStudyRecordSummaries,
   mergeWithLocalProblems,
+  saveLocalStudyRecord,
 } from '@/lib/problemBank'
 import styles from './problems.module.css'
 
 const PINNED_TECHNOLOGIES_KEY = 'tech-drill-pinned-technologies-v1'
+const FAVORITE_PROBLEMS_KEY = 'tech-drill-favorite-problems-v1'
 const PROBLEM_NAV_CONTEXT_KEY = 'problem-nav-context-v1'
 
 const getThemeRecord = (themes: ThemeRelation) =>
@@ -72,6 +74,7 @@ export default function Problems() {
   const [filterTechnology, setFilterTechnology] = useState('all')
   const [technologyQuery, setTechnologyQuery] = useState('')
   const [pinnedTechnologies, setPinnedTechnologies] = useState<string[]>([])
+  const [favoriteProblemIds, setFavoriteProblemIds] = useState<string[]>([])
   const [hasLoadedPinnedTechnologies, setHasLoadedPinnedTechnologies] = useState(false)
   const [session, setSession] = useState<Session | null>(null)
 
@@ -120,6 +123,24 @@ export default function Problems() {
     }
   }, [])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    try {
+      const savedFavoriteProblems = window.localStorage.getItem(FAVORITE_PROBLEMS_KEY)
+      if (!savedFavoriteProblems) return
+
+      const parsedFavoriteProblems = JSON.parse(savedFavoriteProblems)
+      if (Array.isArray(parsedFavoriteProblems)) {
+        setFavoriteProblemIds(
+          parsedFavoriteProblems.filter((problemId): problemId is string => typeof problemId === 'string')
+        )
+      }
+    } catch (error) {
+      console.error('Failed to load favorite problems:', error)
+    }
+  }, [])
+
   const fetchData = async () => {
     setLoading(true)
     try {
@@ -149,7 +170,7 @@ export default function Problems() {
       if (currentSession) {
         const { data: recordsData, error: recordsError } = await supabase
           .from('study_records')
-          .select('problem_id, self_assessment, is_weak')
+          .select('problem_id, self_assessment, is_weak, is_favorite')
           .eq('user_id', currentSession.user.id)
 
         if (recordsError) throw recordsError
@@ -159,6 +180,7 @@ export default function Problems() {
           recordMap[record.problem_id] = record
         })
         setRecords(recordMap)
+        setFavoriteProblemIds(recordsData?.filter((record) => record.is_favorite).map((record) => record.problem_id) ?? [])
 
         // ログイン中はSupabaseから固定技術を取得してlocalStorageの値を上書き
         const { data: settingsData, error: settingsError } = await supabase
@@ -286,6 +308,51 @@ export default function Problems() {
     }
   }
 
+  const toggleFavoriteProblem = async (problemId: string) => {
+    const shouldFavorite = !favoriteProblemIds.includes(problemId)
+    const next = shouldFavorite
+      ? [...favoriteProblemIds, problemId]
+      : favoriteProblemIds.filter((item) => item !== problemId)
+
+    setFavoriteProblemIds(next)
+    setRecords((currentRecords) => ({
+      ...currentRecords,
+      [problemId]: {
+        problem_id: problemId,
+        self_assessment: currentRecords[problemId]?.self_assessment ?? '',
+        is_weak: currentRecords[problemId]?.is_weak ?? false,
+        is_favorite: shouldFavorite,
+      },
+    }))
+
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(FAVORITE_PROBLEMS_KEY, JSON.stringify(next))
+    }
+
+    if (!session) {
+      saveLocalStudyRecord(problemId, {
+        is_favorite: shouldFavorite,
+        last_studied_at: new Date().toISOString(),
+      })
+      return
+    }
+
+    try {
+      const { error } = await supabase.from('study_records').upsert({
+        user_id: session.user.id,
+        problem_id: problemId,
+        is_favorite: shouldFavorite,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,problem_id' })
+
+      if (error) {
+        console.error('Failed to save favorite problem:', error)
+      }
+    } catch (error) {
+      console.error('Failed to save favorite problem:', error)
+    }
+  }
+
   const filteredProblems = problems
     .filter((problem) => {
       const technology = getTechnologyRecord(problem.themes)
@@ -295,6 +362,9 @@ export default function Problems() {
 
       if (filterStatus === 'weak') {
         return records[problem.id]?.is_weak === true
+      }
+      if (filterStatus === 'favorite') {
+        return favoriteProblemIds.includes(problem.id) || records[problem.id]?.is_favorite === true
       }
       if (filterStatus === 'unattempted') {
         return !records[problem.id] || !records[problem.id].self_assessment
@@ -503,6 +573,7 @@ export default function Problems() {
               <option value="close">惜しい</option>
               <option value="fail">できなかった</option>
               <option value="weak">苦手のみ</option>
+              <option value="favorite">お気に入りのみ</option>
             </select>
           </div>
         </div>
@@ -512,50 +583,64 @@ export default function Problems() {
         {filteredProblems.map((problem) => {
           const record = records[problem.id]
           const isWeak = record?.is_weak
+          const isFavorite = favoriteProblemIds.includes(problem.id) || record?.is_favorite === true
           const theme = getThemeRecord(problem.themes)
           const technology = getTechnologyRecord(problem.themes)
 
           return (
-            <Link
-              href={buildProblemHref(problem.id)}
-              key={problem.id}
-              className={`${styles.card} animate-fade-in`}
-              onClick={saveProblemNavigationContext}
-            >
-              <div className={styles.cardHeader}>
-                <h2 className={styles.cardTitle}>{problem.title}</h2>
-              </div>
+            <article key={problem.id} className={`${styles.card} animate-fade-in`}>
+              <button
+                type="button"
+                className={`${styles.favoriteButton} ${isFavorite ? styles.favoriteButtonActive : ''}`}
+                onClick={() => void toggleFavoriteProblem(problem.id)}
+                aria-pressed={isFavorite}
+                aria-label={isFavorite ? 'お気に入りから外す' : 'お気に入りに追加'}
+                title={isFavorite ? 'お気に入りから外す' : 'お気に入りに追加'}
+              >
+                {isFavorite ? '★' : '☆'}
+              </button>
 
-              <div className={styles.badgeGroup}>
-                {technology?.name && <span className={styles.badge}>{technology.name}</span>}
-                <span className={`${styles.badge} ${styles.badgeTheme}`}>{theme?.name || 'テーマ未設定'}</span>
-                <span
-                  className={`${styles.badge} ${
-                    problem.level === 1
-                      ? styles.badgeLevel1
-                      : problem.level === 2
-                        ? styles.badgeLevel2
-                        : styles.badgeLevel3
-                  }`}
-                >
-                  Lv.{problem.level}
-                </span>
-                <span className={styles.badge}>{getProblemTypeLabel(problem.type)}</span>
-              </div>
+              <Link
+                href={buildProblemHref(problem.id)}
+                className={styles.cardLink}
+                onClick={saveProblemNavigationContext}
+              >
+                <div className={styles.cardHeader}>
+                  <h2 className={styles.cardTitle}>{problem.title}</h2>
+                </div>
 
-              <div className={styles.statusIndicator}>
-                {record?.self_assessment === 'success' ? (
-                  <span className={styles.statusSolved}>OK できた</span>
-                ) : record?.self_assessment === 'close' ? (
-                  <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>もう少し</span>
-                ) : record?.self_assessment === 'fail' ? (
-                  <span style={{ color: '#ef4444', fontWeight: 'bold' }}>未達成</span>
-                ) : (
-                  <span style={{ color: '#94a3b8' }}>未学習</span>
-                )}
-                {isWeak && <span className={styles.statusWeak}>苦手</span>}
-              </div>
-            </Link>
+                <div className={styles.badgeGroup}>
+                  {technology?.name && <span className={styles.badge}>{technology.name}</span>}
+                  <span className={`${styles.badge} ${styles.badgeTheme}`}>{theme?.name || 'テーマ未設定'}</span>
+                  <span
+                    className={`${styles.badge} ${
+                      problem.level === 1
+                        ? styles.badgeLevel1
+                        : problem.level === 2
+                          ? styles.badgeLevel2
+                          : styles.badgeLevel3
+                    }`}
+                  >
+                    Lv.{problem.level}
+                  </span>
+                  <span className={styles.badge}>{getProblemTypeLabel(problem.type)}</span>
+                </div>
+
+                <div className={styles.statusIndicator}>
+                  {record?.self_assessment === 'success' ? (
+                    <span className={styles.statusSolved}>OK できた</span>
+                  ) : record?.self_assessment === 'close' ? (
+                    <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>もう少し</span>
+                  ) : record?.self_assessment === 'fail' ? (
+                    <span style={{ color: '#ef4444', fontWeight: 'bold' }}>未達成</span>
+                  ) : (
+                    <span style={{ color: '#94a3b8' }}>未学習</span>
+                  )}
+                  {isWeak && <span className={styles.statusWeak}>苦手</span>}
+                  {isFavorite && <span className={styles.statusFavorite}>お気に入り</span>}
+                </div>
+              </Link>
+            </article>
           )
         })}
       </div>

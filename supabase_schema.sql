@@ -48,6 +48,7 @@ CREATE TABLE study_records (
     self_assessment TEXT CHECK (self_assessment IN ('success', 'close', 'fail')),
     is_strong BOOLEAN NOT NULL DEFAULT false,
     is_weak BOOLEAN NOT NULL DEFAULT false,
+    is_favorite BOOLEAN NOT NULL DEFAULT false,
     last_studied_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,

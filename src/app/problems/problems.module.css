@@ -232,10 +232,10 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1.5rem;
+  position: relative;
   display: flex;
   flex-direction: column;
   transition: transform 0.2s, box-shadow 0.2s;
-  text-decoration: none;
   color: inherit;
 }
 
@@ -243,6 +243,44 @@
   transform: translateY(-4px);
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
   border-color: var(--primary);
+}
+
+.cardLink {
+  color: inherit;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  text-decoration: none;
+}
+
+.favoriteButton {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background-color: rgba(15, 23, 42, 0.9);
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s, transform 0.2s;
+  z-index: 1;
+}
+
+.favoriteButton:hover {
+  border-color: rgba(251, 191, 36, 0.65);
+  color: #fcd34d;
+  transform: scale(1.08);
+}
+
+.favoriteButtonActive {
+  background-color: rgba(251, 191, 36, 0.14);
+  border-color: rgba(251, 191, 36, 0.62);
+  color: #fbbf24;
 }
 
 .cardHeader {
@@ -256,7 +294,7 @@
   font-size: 1.25rem;
   font-weight: 600;
   line-height: 1.4;
-  margin-right: 0.5rem;
+  margin-right: 2.5rem;
 }
 
 .badgeGroup {
@@ -297,6 +335,10 @@
 
 .statusWeak {
   color: var(--warning);
+}
+
+.statusFavorite {
+  color: #fbbf24;
 }
 
 @media (max-width: 720px) {
