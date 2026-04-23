@@ -106,6 +106,35 @@
   z-index: 30;
 }
 
+.editorFrame {
+  position: relative;
+}
+
+.editorResizeHandle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-bottom-right-radius: calc(var(--radius) / 2);
+  background:
+    linear-gradient(135deg, transparent 0 48%, rgba(226, 232, 240, 0.92) 49% 54%, transparent 55%),
+    linear-gradient(135deg, transparent 0 66%, rgba(226, 232, 240, 0.72) 67% 72%, transparent 73%),
+    rgba(15, 23, 42, 0.68);
+  cursor: nwse-resize;
+}
+
+.editorResizeHandle:hover,
+.editorResizeHandle:focus-visible {
+  outline: none;
+  background:
+    linear-gradient(135deg, transparent 0 48%, #eff6ff 49% 54%, transparent 55%),
+    linear-gradient(135deg, transparent 0 66%, rgba(191, 219, 254, 0.92) 67% 72%, transparent 73%),
+    rgba(37, 99, 235, 0.82);
+}
+
 .textarea {
   flex: 1;
   min-height: 400px;

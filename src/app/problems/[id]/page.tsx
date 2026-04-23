@@ -21,6 +21,11 @@ type ProblemDetailRecord = ProblemRecord
 const PROBLEM_NAV_CONTEXT_KEY = 'problem-nav-context-v1'
 const RANDOM_NEXT_MODE_KEY = 'problem-random-next-mode-v1'
 const MEMO_SAVE_MODE_KEY = 'problem-memo-save-mode-v1'
+const EDITOR_DEFAULT_HEIGHT = 420
+const EDITOR_MIN_HEIGHT = 280
+const EDITOR_MAX_HEIGHT = 760
+const EDITOR_MIN_WIDTH = 360
+const EDITOR_MAX_WIDTH = 980
 
 const getThemeRecord = (themes: ThemeRelation) => Array.isArray(themes) ? (themes[0] ?? null) : (themes ?? null)
 const getTechnologyRecord = (themes: ThemeRelation) => {
@@ -121,6 +126,13 @@ export default function ProblemDetail() {
   const editorAreaRef = useRef<HTMLDivElement | null>(null)
   const editorStickyPanelRef = useRef<HTMLDivElement | null>(null)
   const saveStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const editorResizeStartRef = useRef<{
+    pointerX: number
+    pointerY: number
+    width: number
+    height: number
+    maxWidth: number
+  } | null>(null)
   const [returnTechnology, setReturnTechnology] = useState<string | null>(null)
   const [returnLevel, setReturnLevel] = useState<string | null>(null)
   const [returnStatus, setReturnStatus] = useState<string | null>(null)
@@ -137,6 +149,8 @@ export default function ProblemDetail() {
   const [savedMemo, setSavedMemo] = useState('')
   const [isMemoAutoSave, setIsMemoAutoSave] = useState(true)
   const [showAnswer, setShowAnswer] = useState(false)
+  const [editorHeight, setEditorHeight] = useState(EDITOR_DEFAULT_HEIGHT)
+  const [editorWidth, setEditorWidth] = useState<number | null>(null)
   
   const [assessment, setAssessment] = useState<string | null>(null)
   const [isWeak, setIsWeak] = useState(false)
@@ -169,6 +183,42 @@ export default function ProblemDetail() {
       if (saveStatusTimeoutRef.current) {
         clearTimeout(saveStatusTimeoutRef.current)
       }
+    }
+  }, [])
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!editorResizeStartRef.current) return
+
+      const dragDistance = event.clientY - editorResizeStartRef.current.pointerY
+      const dragWidthDistance = event.clientX - editorResizeStartRef.current.pointerX
+      const nextHeight = editorResizeStartRef.current.height + dragDistance
+      const nextWidth = editorResizeStartRef.current.width + dragWidthDistance
+      setEditorHeight(Math.min(EDITOR_MAX_HEIGHT, Math.max(EDITOR_MIN_HEIGHT, nextHeight)))
+      setEditorWidth(
+        Math.min(
+          editorResizeStartRef.current.maxWidth,
+          Math.max(Math.min(EDITOR_MIN_WIDTH, editorResizeStartRef.current.maxWidth), nextWidth)
+        )
+      )
+    }
+
+    const handlePointerUp = () => {
+      if (!editorResizeStartRef.current) return
+
+      editorResizeStartRef.current = null
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
     }
   }, [])
   
@@ -429,6 +479,10 @@ export default function ProblemDetail() {
   const inputPlaceholder = isFillBlank
     ? '空欄に入る答えだけを入力してください'
     : 'ここにコードを書いてください'
+  const editorPanelStyle: React.CSSProperties = {
+    ...editorDockStyle,
+    ...(editorWidth ? { width: `${editorWidth}px` } : {}),
+  }
 
   const handleCodeChange = (val: string) => {
     setCode(val)
@@ -439,6 +493,24 @@ export default function ProblemDetail() {
   const handleMemoChange = (val: string) => {
     setMemo(val)
     setSaveStatus(null)
+  }
+
+  const handleEditorResizeStart = (event: React.PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    const editorPanelRect = editorStickyPanelRef.current?.getBoundingClientRect()
+    const currentWidth = editorPanelRect?.width ?? editorAreaRef.current?.getBoundingClientRect().width ?? 0
+    const availableWidth = editorPanelRect ? window.innerWidth - editorPanelRect.left - 16 : currentWidth
+    const maxWidth = Math.max(currentWidth, Math.min(EDITOR_MAX_WIDTH, availableWidth))
+
+    editorResizeStartRef.current = {
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      width: currentWidth,
+      height: editorHeight,
+      maxWidth,
+    }
+    document.body.style.cursor = 'nwse-resize'
+    document.body.style.userSelect = 'none'
   }
 
   const handleToggleRandomNextMode = () => {
@@ -901,19 +973,27 @@ export default function ProblemDetail() {
                 ? styles.editorStickyPanelFixed
                 : ''
             }`}
-            style={editorDockStyle}
+            style={editorPanelStyle}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
               <span style={{ fontWeight: 600 }}>{inputLabel}</span>
               {saveStatus && <span className={styles.saveMessage}>{saveStatus}</span>}
             </div>
-            <CodeEditor
-              value={code}
-              onChange={handleCodeChange}
-              placeholderText={inputPlaceholder}
-              language={editorLanguage}
-              minHeight={420}
-            />
+            <div className={styles.editorFrame}>
+              <CodeEditor
+                value={code}
+                onChange={handleCodeChange}
+                placeholderText={inputPlaceholder}
+                language={editorLanguage}
+                minHeight={editorHeight}
+              />
+              <button
+                type="button"
+                className={styles.editorResizeHandle}
+                onPointerDown={handleEditorResizeStart}
+                aria-label="コード欄の大きさを変更"
+              />
+            </div>
             <div className={`${styles.actionRow} ${styles.editorActionRow}`}>
               <span className={styles.editorHint}>
                 {code === savedCode
