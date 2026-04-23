@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -20,6 +20,7 @@ import styles from './detail.module.css'
 type ProblemDetailRecord = ProblemRecord
 const PROBLEM_NAV_CONTEXT_KEY = 'problem-nav-context-v1'
 const RANDOM_NEXT_MODE_KEY = 'problem-random-next-mode-v1'
+const MEMO_SAVE_MODE_KEY = 'problem-memo-save-mode-v1'
 
 const getThemeRecord = (themes: ThemeRelation) => Array.isArray(themes) ? (themes[0] ?? null) : (themes ?? null)
 const getTechnologyRecord = (themes: ThemeRelation) => {
@@ -119,6 +120,7 @@ export default function ProblemDetail() {
   const contentWrapperRef = useRef<HTMLDivElement | null>(null)
   const editorAreaRef = useRef<HTMLDivElement | null>(null)
   const editorStickyPanelRef = useRef<HTMLDivElement | null>(null)
+  const saveStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [returnTechnology, setReturnTechnology] = useState<string | null>(null)
   const [returnLevel, setReturnLevel] = useState<string | null>(null)
   const [returnStatus, setReturnStatus] = useState<string | null>(null)
@@ -133,6 +135,7 @@ export default function ProblemDetail() {
   const [savedCode, setSavedCode] = useState('')
   const [memo, setMemo] = useState('')
   const [savedMemo, setSavedMemo] = useState('')
+  const [isMemoAutoSave, setIsMemoAutoSave] = useState(true)
   const [showAnswer, setShowAnswer] = useState(false)
   
   const [assessment, setAssessment] = useState<string | null>(null)
@@ -144,6 +147,30 @@ export default function ProblemDetail() {
   const [editorDockStyle, setEditorDockStyle] = useState<React.CSSProperties>({})
   
   const [checkResult, setCheckResult] = useState<{ isCorrect: boolean, message: string } | null>(null)
+
+  const showSaveStatus = useCallback((message: string, clearAfterMs?: number) => {
+    if (saveStatusTimeoutRef.current) {
+      clearTimeout(saveStatusTimeoutRef.current)
+      saveStatusTimeoutRef.current = null
+    }
+
+    setSaveStatus(message)
+
+    if (clearAfterMs) {
+      saveStatusTimeoutRef.current = setTimeout(() => {
+        setSaveStatus(null)
+        saveStatusTimeoutRef.current = null
+      }, clearAfterMs)
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (saveStatusTimeoutRef.current) {
+        clearTimeout(saveStatusTimeoutRef.current)
+      }
+    }
+  }, [])
   
   useEffect(() => {
     async function loadProblem() {
@@ -283,6 +310,12 @@ export default function ProblemDetail() {
     setIsRandomNextMode(window.localStorage.getItem(RANDOM_NEXT_MODE_KEY) === 'on')
   }, [])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    setIsMemoAutoSave(window.localStorage.getItem(MEMO_SAVE_MODE_KEY) !== 'manual')
+  }, [])
+
   const buildProblemsListHref = () => {
     const query: Record<string, string> = {}
 
@@ -369,6 +402,10 @@ export default function ProblemDetail() {
     [navigationProblemOrder, problemSequence, returnTechnology]
   )
   const currentProblemIndex = navigableProblems.findIndex((candidate) => candidate.id === id)
+  const previousProblem =
+    currentProblemIndex > 0
+      ? navigableProblems[currentProblemIndex - 1]
+      : null
   const sequentialNextProblem =
     currentProblemIndex >= 0 && currentProblemIndex < navigableProblems.length - 1
       ? navigableProblems[currentProblemIndex + 1]
@@ -382,7 +419,7 @@ export default function ProblemDetail() {
     ? randomCandidateProblems.find((candidate) => candidate.id === randomNextProblemId) ?? null
     : null
   const nextProblem = isRandomNextMode ? randomNextProblem : sequentialNextProblem
-  const canNavigateToAnotherProblem = Boolean(sequentialNextProblem) || randomCandidateProblems.length > 0
+  const canNavigateToAnotherProblem = Boolean(previousProblem) || Boolean(sequentialNextProblem) || randomCandidateProblems.length > 0
   const isFillBlank = problem?.type === 'fill_blank'
   const canAutoCheck = isFillBlank
   const inputLabel = isFillBlank ? '空欄の答え' : 'あなたのコード'
@@ -413,18 +450,33 @@ export default function ProblemDetail() {
     }
   }
 
+  const handleMemoSaveModeChange = (shouldAutoSave: boolean) => {
+    setIsMemoAutoSave(shouldAutoSave)
+    setSaveStatus(null)
+
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(MEMO_SAVE_MODE_KEY, shouldAutoSave ? 'auto' : 'manual')
+    }
+  }
+
   const handleAssessment = async (status: string) => {
     setAssessment(status)
-    await saveRecord(savedCode, savedMemo, status, isWeak)
+    const didSave = await saveRecord(savedCode, memo, status, isWeak)
+    if (didSave) {
+      setSavedMemo(memo)
+    }
   }
 
   const handleToggleWeak = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const weak = e.target.checked
     setIsWeak(weak)
-    await saveRecord(savedCode, savedMemo, assessment, weak)
+    const didSave = await saveRecord(savedCode, memo, assessment, weak)
+    if (didSave) {
+      setSavedMemo(memo)
+    }
   }
 
-  const saveRecord = async (
+  const saveRecord = useCallback(async (
     userCode: string,
     userMemo: string,
     selfAssess: string | null,
@@ -437,13 +489,12 @@ export default function ProblemDetail() {
         is_weak: weak,
         last_studied_at: new Date().toISOString(),
       })
-      setSaveStatus('ローカル保存しました')
-      setTimeout(() => setSaveStatus(null), 2000)
+      showSaveStatus('ローカル保存しました', 2000)
       return true
     }
 
     if (!userId) {
-      setSaveStatus('ログインしてください')
+      showSaveStatus('ログインしてください')
       return false
     }
     
@@ -462,20 +513,43 @@ export default function ProblemDetail() {
         })
 
       if (error) throw error
-      setSaveStatus('保存しました')
-      setTimeout(() => setSaveStatus(null), 2000)
+      showSaveStatus('保存しました', 2000)
       return true
     } catch (err) {
       console.error(err)
-      setSaveStatus('保存に失敗しました')
+      showSaveStatus('保存に失敗しました')
       return false
     }
-  }
+  }, [id, isLocalProblem, showSaveStatus, userId])
+
+  useEffect(() => {
+    if (loading || !problem) return
+    if (!isMemoAutoSave) return
+    if (memo === savedMemo) return
+
+    let cancelled = false
+    const timeoutId = setTimeout(() => {
+      const memoToSave = memo
+
+      showSaveStatus('メモを自動保存中...')
+      void saveRecord(savedCode, memoToSave, assessment, isWeak).then((didSave) => {
+        if (!cancelled && didSave) {
+          setSavedMemo(memoToSave)
+        }
+      })
+    }, 800)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timeoutId)
+    }
+  }, [assessment, isMemoAutoSave, isWeak, loading, memo, problem, saveRecord, savedCode, savedMemo, showSaveStatus])
 
   const handleSaveCode = async () => {
-    const didSave = await saveRecord(code, savedMemo, assessment, isWeak)
+    const didSave = await saveRecord(code, memo, assessment, isWeak)
     if (didSave) {
       setSavedCode(code)
+      setSavedMemo(memo)
     }
   }
 
@@ -704,7 +778,27 @@ export default function ProblemDetail() {
               )}
 
               <div className={styles.memoSection}>
-                <h3 className={styles.memoTitle}>メモ</h3>
+                <div className={styles.memoHeader}>
+                  <h3 className={styles.memoTitle}>メモ</h3>
+                  <div className={styles.memoModeTabs} aria-label="メモの保存方法">
+                    <button
+                      type="button"
+                      className={`${styles.memoModeButton} ${isMemoAutoSave ? styles.memoModeButtonActive : ''}`}
+                      onClick={() => handleMemoSaveModeChange(true)}
+                      aria-pressed={isMemoAutoSave}
+                    >
+                      自動保存
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.memoModeButton} ${!isMemoAutoSave ? styles.memoModeButtonActive : ''}`}
+                      onClick={() => handleMemoSaveModeChange(false)}
+                      aria-pressed={!isMemoAutoSave}
+                    >
+                      普通の保存
+                    </button>
+                  </div>
+                </div>
                 <textarea
                   className={styles.memoTextarea}
                   value={memo}
@@ -713,13 +807,19 @@ export default function ProblemDetail() {
                 />
                 <div className={styles.actionRow}>
                   <span className={styles.memoHint}>
-                    {memo === savedMemo
-                      ? 'メモは自動保存されません。'
-                      : '未保存のメモがあります。メモを保存すると残せます。'}
+                    {isMemoAutoSave
+                      ? memo === savedMemo
+                        ? 'メモは自動保存済みです。'
+                        : '入力が止まると自動保存します。'
+                      : memo === savedMemo
+                        ? 'メモは保存済みです。'
+                        : '未保存のメモがあります。保存すると残せます。'}
                   </span>
-                  <button type="button" className={styles.button} onClick={handleSaveMemo}>
-                    メモを保存
-                  </button>
+                  {!isMemoAutoSave && (
+                    <button type="button" className={styles.button} onClick={handleSaveMemo}>
+                      保存
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -758,6 +858,14 @@ export default function ProblemDetail() {
 
               {canNavigateToAnotherProblem && (
                 <div className={styles.nextProblemRow}>
+                  {previousProblem && (
+                    <Link
+                      href={buildNextProblemHref(previousProblem.id)}
+                      className={`${styles.button} ${styles.nextProblemButton} ${styles.previousProblemButton}`}
+                    >
+                      前の問題へ
+                    </Link>
+                  )}
                   <button
                     type="button"
                     className={`${styles.randomToggleButton} ${isRandomNextMode ? styles.randomToggleButtonActive : ''}`}
